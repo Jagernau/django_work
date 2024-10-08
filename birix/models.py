@@ -6,7 +6,7 @@
 #   * Remove `managed = False` lines if you wish to allow Django to create, modify, and delete the table
 # Feel free to rename the models, but don't rename db_table values or field names.
 from django.db import models
-from birix.validators import validate_sim_tel_number
+from birix.validators import validate_login, validate_password, validate_sim_tel_number, validate_sim_iccid_number
 
 
 class CellOperator(models.Model):
@@ -168,6 +168,7 @@ class LoginUsers(models.Model):
             blank=True, 
             null=False,
             verbose_name='Логин',
+            validators=[validate_login],
             )
     email = models.CharField(
             max_length=60, 
@@ -179,6 +180,7 @@ class LoginUsers(models.Model):
             blank=True, 
             null=False,
             verbose_name='Пароль',
+            validators=[validate_password],
             )
     date_create = models.DateField(
             blank=True,
@@ -227,7 +229,7 @@ class LoginUsers(models.Model):
         managed = False
         db_table = 'Login_users'
         verbose_name = 'Логин пользователя'
-        verbose_name_plural = 'Логины пользователей'
+        verbose_name_plural = '2__Логины пользователей'
 
 
     def __str__(self):
@@ -479,7 +481,7 @@ class CaObjects(models.Model):
         managed = False
         db_table = 'ca_objects'
         verbose_name = 'Объект'
-        verbose_name_plural = 'Объекты'
+        verbose_name_plural = '1__Объекты'
 
 
     def __str__(self):
@@ -502,14 +504,15 @@ class Devices(models.Model):
     device_serial = models.CharField(
             max_length=100,
             blank=False, 
-            null=True, 
+            null=False, 
             db_comment='Серийный номер устройства',
-            verbose_name='Серийный номер устройства'
+            verbose_name='Серийный номер устройства',
+            unique=True
             )
     device_imei = models.CharField(
             max_length=60, 
             blank=False,
-            null=True, 
+            null=False, 
             db_comment='IMEI устройства',
             verbose_name='IMEI устройства',
             unique=True,
@@ -545,7 +548,7 @@ class Devices(models.Model):
     sys_mon = models.ForeignKey(
             'MonitoringSystem',
             models.DO_NOTHING,
-            blank=True,
+            blank=False,
             null=True, 
             db_comment='ID системы мониторинга',
             verbose_name='Система мониторинга',
@@ -577,7 +580,7 @@ class Devices(models.Model):
         managed = False
         db_table = 'devices'
         verbose_name = 'Терминал'
-        verbose_name_plural = 'Терминалы'
+        verbose_name_plural = '3__Терминалы'
 
 
     def __str__(self):
@@ -603,7 +606,7 @@ class DevicesBrands(models.Model):
         managed = False
         db_table = 'devices_brands'
         verbose_name = 'Модель устройства'
-        verbose_name_plural = 'Модели устройств'
+        verbose_name_plural = '7__Модели устройств'
 
     def __str__(self):
         return self.name
@@ -644,12 +647,72 @@ class DevicesCommands(models.Model):
         managed = False
         db_table = 'devices_commands'
         verbose_name = 'Команда терминала'
-        verbose_name_plural = 'Команды терминалов'
+        verbose_name_plural = '8__Команды терминалов'
 
     def __str__(self):
         return self.command
 
 
+
+class DevicesDiagnostics(models.Model):
+
+    class DeviceBringChoices(models.IntegerChoices):
+        from_CLIENT = 0, 'от Клиента'
+        from_REPAIR = 1, 'после Ремонта'
+
+    class DeviceTransferChoices(models.IntegerChoices):
+        get_CLIENT = 0, 'к Клиенту'
+        get_REPAIR = 1, 'в Ремонт'
+
+    device = models.ForeignKey(
+            Devices, 
+            models.DO_NOTHING, 
+            db_comment='Отношение к терминалам',
+            verbose_name='Серийный номер терминала',
+            )
+    programmer = models.ForeignKey(
+            AuthUser,
+            models.DO_NOTHING, 
+            db_comment='Отношение к программистам',
+            verbose_name='Программист',
+            )
+    brought = models.IntegerField(
+            db_comment='Принесён:\r\n0-от клиента\r\n1-после ремонта',
+            verbose_name='Принесён от',
+            choices=DeviceBringChoices.choices,
+            )
+    comment = models.CharField(
+            max_length=300, 
+            db_comment='Коментарий',
+            verbose_name='Коментарий',
+            )
+    accept_date = models.DateTimeField(
+            db_comment='Дата приёма',
+            verbose_name='Дата приёма',
+            )
+    transfer_date = models.DateTimeField(
+            blank=True, 
+            null=True,
+            db_comment='Дата передачи',
+            verbose_name='Дата передачи',
+            )
+    whom_tranfer = models.IntegerField(
+            blank=True, 
+            null=True, 
+            db_comment='Куда отдан:\r\n0 - клиенту\r\n1 - в ремонт',
+            verbose_name='Куда отдан',
+            choices=DeviceTransferChoices.choices,
+            )
+
+    class Meta:
+        managed = False
+        db_table = 'devices_diagnostics'
+        db_table_comment = 'Диагностика терминалов'
+        verbose_name = 'Диагностика терминала'
+        verbose_name_plural = '5__Диагностика терминалов'
+
+    def __str__(self):
+        return self.device.device_serial
 
 
 
@@ -660,7 +723,7 @@ class DevicesVendor(models.Model):
         managed = False
         db_table = 'devices_vendor'
         verbose_name = 'Фирма терминалов'
-        verbose_name_plural = 'Фирмы терминалов'
+        verbose_name_plural = '6__Фирмы терминалов'
 
     def __str__(self):
         return self.vendor_name
@@ -756,7 +819,7 @@ class EquipmentWarehouse(models.Model):
             verbose_name='Модель терминала',
             )
     sensor = models.ForeignKey(
-            'ObjectSensors', 
+            'SensorBrands', 
             models.DO_NOTHING,
             blank=True,
             null=True,
@@ -1151,6 +1214,7 @@ class SimCards(models.Model):
             db_comment='ICCID',
             verbose_name='ICCID',
             unique=True,
+            validators=[validate_sim_iccid_number]
             )
     sim_tel_number = models.CharField(
             max_length=40, 
@@ -1226,7 +1290,7 @@ class SimCards(models.Model):
         managed = False
         db_table = 'sim_cards'
         verbose_name = 'Симкарта'
-        verbose_name_plural = 'Симкарты'
+        verbose_name_plural = '4__Симкарты'
 
     def __str__(self):
         return self.sim_iccid

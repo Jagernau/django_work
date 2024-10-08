@@ -233,6 +233,21 @@ class DevicesCommands(models.Model):
         db_table = 'devices_commands'
 
 
+class DevicesDiagnostics(models.Model):
+    device = models.ForeignKey(Devices, models.DO_NOTHING, db_comment='Отношение к терминалам')
+    programmer = models.ForeignKey(AuthUser, models.DO_NOTHING, db_comment='Отношение к программистам')
+    brought = models.IntegerField(db_comment='Принесён:\r\n0-от клиента\r\n1-после ремонта')
+    comment = models.CharField(max_length=300, db_comment='Коментарий')
+    accept_date = models.DateTimeField(db_comment='Дата приёма')
+    transfer_date = models.DateTimeField(blank=True, null=True, db_comment='Дата передачи')
+    whom_tranfer = models.IntegerField(blank=True, null=True, db_comment='Куда отдан:\r\n0 - клиенту\r\n1 - в ремонт')
+
+    class Meta:
+        managed = False
+        db_table = 'devices_diagnostics'
+        db_table_comment = 'Диагностика терминалов'
+
+
 class DevicesLoggerCommands(models.Model):
     command_date = models.DateTimeField(db_comment='Время отправки команды ')
     command_resresponse = models.CharField(max_length=200, db_comment='Ответ на команду')
@@ -406,14 +421,18 @@ class ObjectRetranslators(models.Model):
 class ObjectSensors(models.Model):
     sensor_id = models.AutoField(primary_key=True)
     sensor_type = models.IntegerField(db_comment='Тип датчика:\r\n1ДУТ, 2Температуры3наклона')
-    sensor_vendor = models.CharField(max_length=255, blank=True, null=True, db_comment='производитель')
-    sensor_vendor_model = models.CharField(max_length=255, blank=True, null=True, db_comment='Модель датчика')
+    sensor_model = models.ForeignKey('SensorBrands', models.DO_NOTHING, blank=True, null=True, db_comment='Модель датчика к моделям')
     sensor_technology = models.IntegerField(db_comment='Подтип датчика:\r\n1аналоговый,2цифровой,\r\n3частотный')
     sensor_connect_type = models.CharField(max_length=255, blank=True, null=True, db_comment='Тип подключения')
+    client = models.ForeignKey(Contragents, models.DO_NOTHING, blank=True, null=True, db_comment='Связь с id Клиента')
+    sensor_serial = models.CharField(unique=True, max_length=100, blank=True, null=True, db_comment='Серийный номер датчика')
+    name_installer = models.CharField(max_length=150, blank=True, null=True, db_comment='Имя монтажника')
+    installer_id = models.IntegerField(blank=True, null=True, db_comment='Id монтажника')
 
     class Meta:
         managed = False
         db_table = 'object_sensors'
+        db_table_comment = 'Датчик'
 
 
 class ObjectStatuses(models.Model):
@@ -433,7 +452,7 @@ class ObjectVehicles(models.Model):
     vehicle_vendor_name = models.CharField(max_length=255, blank=True, null=True)
     vehicle_vendor_model = models.CharField(max_length=255, blank=True, null=True)
     vehicle_year_of_manufacture = models.CharField(max_length=255, blank=True, null=True)
-    vehicle_gos_nomer = models.CharField(max_length=255, blank=True, null=True)
+    vehicle_gos_nomer = models.CharField(unique=True, max_length=25)
     vehicle_gos_nomer_region = models.CharField(max_length=255, blank=True, null=True)
     vehicle_type = models.CharField(max_length=255, blank=True, null=True)
     vehicle_vin = models.CharField(max_length=255, blank=True, null=True)
@@ -441,6 +460,25 @@ class ObjectVehicles(models.Model):
     class Meta:
         managed = False
         db_table = 'object_vehicles'
+
+
+class SensorBrands(models.Model):
+    name = models.CharField(max_length=200, db_comment='Название модели')
+    sensor_vendor = models.ForeignKey('SensorVendor', models.DO_NOTHING, db_comment='Связь к Фирме изготовителя')
+
+    class Meta:
+        managed = False
+        db_table = 'sensor_brands'
+        db_table_comment = 'Таблица моделей датчиков'
+
+
+class SensorVendor(models.Model):
+    name = models.CharField(max_length=200, db_comment='Имя производителя')
+
+    class Meta:
+        managed = False
+        db_table = 'sensor_vendor'
+        db_table_comment = 'Производители датчиков'
 
 
 class SimCards(models.Model):

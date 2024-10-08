@@ -4,8 +4,15 @@ from django import forms
 from django.http import HttpResponse
 from openpyxl import Workbook
 import ast
+from django.contrib.auth.mixins import LoginRequiredMixin
+import openpyxl
 
-class ContragentsAdmin(admin.ModelAdmin):
+
+class ContragentsAdmin(LoginRequiredMixin, admin.ModelAdmin):
+
+    actions = ['download_excel',]
+
+
     list_display = (
             "ca_name", 
             "ca_shortname",
@@ -40,8 +47,38 @@ class ContragentsAdmin(admin.ModelAdmin):
         )
     list_per_page = 20
 
+    def download_excel(self, request, queryset):
+            workbook = openpyxl.Workbook()
+            worksheet = workbook.active
+            worksheet.title = "Contragents Data"
 
-class LoginUsersAdmin(admin.ModelAdmin):
+            # Write headers
+            header_row = ["ca_name", "ca_shortname", "ca_inn", "ca_kpp", "ca_field_of_activity"]
+            for col_num, header in enumerate(header_row, 1):
+                worksheet.cell(row=1, column=col_num).value = header
+
+            # Write data rows
+            row_num = 2
+            for contragent in queryset:
+                worksheet.cell(row=row_num, column=1).value = contragent.ca_name
+                worksheet.cell(row=row_num, column=2).value = contragent.ca_shortname
+                worksheet.cell(row=row_num, column=3).value = contragent.ca_inn
+                worksheet.cell(row=row_num, column=4).value = contragent.ca_kpp
+                worksheet.cell(row=row_num, column=5).value = contragent.ca_field_of_activity
+                row_num += 1
+
+            # Set content type and attachment filename
+            response = HttpResponse(content_type='application/vnd.ms-excel')
+            response['Content-Disposition'] = 'attachment; filename=contragents.xlsx'
+
+            # Write workbook to response
+            workbook.save(response)
+            return response
+
+
+class LoginUsersAdmin(LoginRequiredMixin,admin.ModelAdmin):
+
+    actions = ['download_excel',]
 
     list_display = (
             "login",
@@ -98,9 +135,45 @@ class LoginUsersAdmin(admin.ModelAdmin):
     autocomplete_fields = ('contragent',)
     list_per_page = 20
 
+    def download_excel(self, request, queryset):
+            workbook = openpyxl.Workbook()
+            worksheet = workbook.active
+            worksheet.title = "LoginUsers Data"
+
+            # Write headers
+            header_row = ["login", "email", "password", "date_create", "system", "contragent", "comment_field", "account_status"]
+            for col_num, header in enumerate(header_row, 1):
+                worksheet.cell(row=1, column=col_num).value = header
+
+            # Write data rows
+            row_num = 2
+            for loginuser in queryset:
+                worksheet.cell(row=row_num, column=1).value = str(loginuser.login)
+                worksheet.cell(row=row_num, column=2).value = str(loginuser.email)
+                worksheet.cell(row=row_num, column=3).value = str(loginuser.password)
+                worksheet.cell(row=row_num, column=4).value = str(loginuser.date_create)
+                worksheet.cell(row=row_num, column=5).value = str(loginuser.system)
+                worksheet.cell(row=row_num, column=6).value = str(loginuser.contragent)
+                worksheet.cell(row=row_num, column=7).value = str(loginuser.comment_field)
+                worksheet.cell(row=row_num, column=8).value = str(loginuser.account_status)
+                row_num += 1
+
+            # Set content type and attachment filename
+            response = HttpResponse(content_type='application/vnd.ms-excel')
+            response['Content-Disposition'] = 'attachment; filename=loginusers.xlsx'
+
+            # Write workbook to response
+            workbook.save(response)
+            return response
 
 
-class CaObjectsAdmin(admin.ModelAdmin):
+
+class CaObjectsAdmin(LoginRequiredMixin,admin.ModelAdmin):
+
+    actions = ['download_excel',]
+    readonly_fields = ('sys_mon', 'object_name', 'object_status', 'owner_contragent', 'owner_user', 'contragent', 'imei')
+
+
     list_display = (
             "sys_mon",
             "object_name",
@@ -170,7 +243,38 @@ class CaObjectsAdmin(admin.ModelAdmin):
     get_sim.short_description = 'Симкарта'
 
 
-class GlobalLogAdmin(admin.ModelAdmin):
+    def download_excel(self, request, queryset):
+            workbook = openpyxl.Workbook()
+            worksheet = workbook.active
+            worksheet.title = "CaObjects Data"
+
+            # Write headers
+            header_row = ["sys_mon", "object_name", "object_status", "owner_contragent", "owner_user", "contragent", "imei"]
+            for col_num, header in enumerate(header_row, 1):
+                worksheet.cell(row=1, column=col_num).value = header
+
+            # Write data rows
+            row_num = 2
+            for caobject in queryset:
+                worksheet.cell(row=row_num, column=1).value = str(caobject.sys_mon)
+                worksheet.cell(row=row_num, column=2).value = str(caobject.object_name)
+                worksheet.cell(row=row_num, column=3).value = str(caobject.object_status)
+                worksheet.cell(row=row_num, column=4).value = str(caobject.owner_contragent)
+                worksheet.cell(row=row_num, column=5).value = str(caobject.owner_user)
+                worksheet.cell(row=row_num, column=6).value = str(caobject.contragent)
+                worksheet.cell(row=row_num, column=7).value = str(caobject.imei)
+                row_num += 1
+
+            # Set content type and attachment filename
+            response = HttpResponse(content_type='application/vnd.ms-excel')
+            response['Content-Disposition'] = 'attachment; filename=caobjects.xlsx'
+
+            # Write workbook to response
+            workbook.save(response)
+            return response
+
+
+class GlobalLogAdmin(LoginRequiredMixin,admin.ModelAdmin):
     list_display = (
             "section_type",
             "get_obj_client",
@@ -280,17 +384,9 @@ class GlobalLogAdmin(admin.ModelAdmin):
 
 
 
-class SimCardsAdmin(admin.ModelAdmin):
+class SimCardsAdmin(LoginRequiredMixin,admin.ModelAdmin):
 
-
-    actions = ['copy_record']
-
-    def copy_record(self, request, queryset):
-        for obj in queryset:
-            obj.id = None
-            obj.save()
-
-    copy_record.short_description = "Копировать запись"
+    actions = ['download_excel',]
 
     list_display = (
             "sim_iccid",
@@ -376,17 +472,42 @@ class SimCardsAdmin(admin.ModelAdmin):
     get_device.short_description = 'Серийный номер устройства'
 #    list_display_links = ('get_device',)
 
-class DevicesAdmin(admin.ModelAdmin):
+    def download_excel(self, request, queryset):
+            workbook = openpyxl.Workbook()
+            worksheet = workbook.active
+            worksheet.title = "SimCards Data"
 
+            # Write headers
+            header_row = ["sim_iccid", "sim_tel_number", "client_name", "sim_cell_operator", "sim_owner", "sim_date", "contragent", "terminal_imei", "itprogrammer", "status"]
+            for col_num, header in enumerate(header_row, 1):
+                worksheet.cell(row=1, column=col_num).value = header
 
-    actions = ['copy_record']
+            # Write data rows
+            row_num = 2
+            for sim in queryset:
+                worksheet.cell(row=row_num, column=1).value = str(sim.sim_iccid)
+                worksheet.cell(row=row_num, column=2).value = str(sim.sim_tel_number)
+                worksheet.cell(row=row_num, column=3).value = str(sim.client_name)
+                worksheet.cell(row=row_num, column=4).value = str(sim.sim_cell_operator)
+                worksheet.cell(row=row_num, column=5).value = str(sim.sim_owner)
+                worksheet.cell(row=row_num, column=6).value = str(sim.sim_date)
+                worksheet.cell(row=row_num, column=7).value = str(sim.contragent)
+                worksheet.cell(row=row_num, column=8).value = str(sim.terminal_imei)
+                worksheet.cell(row=row_num, column=9).value = str(sim.itprogrammer)
+                worksheet.cell(row=row_num, column=10).value = str(sim.status)
+                row_num += 1
 
-    def copy_record(self, request, queryset):
-        for obj in queryset:
-            obj.id = None
-            obj.save()
+            # Set content type and attachment filename
+            response = HttpResponse(content_type='application/vnd.ms-excel')
+            response['Content-Disposition'] = 'attachment; filename=caobjects.xlsx'
 
-    copy_record.short_description = "Копировать запись"
+            # Write workbook to response
+            workbook.save(response)
+            return response
+
+class DevicesAdmin(LoginRequiredMixin,admin.ModelAdmin):
+
+    actions = ['download_excel',]
 
     list_display = (
             "device_serial",
@@ -458,7 +579,47 @@ class DevicesAdmin(admin.ModelAdmin):
     get_sim.short_description = 'Симкарта на устройстве'
 #    list_display_links = ('get_sim',)
 
-class DeviceBrandsAdmin(admin.ModelAdmin):
+    def download_excel(self, request, queryset):
+            workbook = openpyxl.Workbook()
+            worksheet = workbook.active
+            worksheet.title = "Terminal Data"
+
+            # Write headers
+            header_row = [
+                    "device_serial",
+                    "device_imei",
+                    "client_name",
+                    "terminal_date",
+                    "devices_brand",
+                    "sys_mon",
+                    "contragent",
+                    'itprogrammer',
+                    ]
+            for col_num, header in enumerate(header_row, 1):
+                worksheet.cell(row=1, column=col_num).value = header
+
+            # Write data rows
+            row_num = 2
+            for sim in queryset:
+                worksheet.cell(row=row_num, column=1).value = str(sim.device_serial)
+                worksheet.cell(row=row_num, column=2).value = str(sim.device_imei)
+                worksheet.cell(row=row_num, column=3).value = str(sim.client_name)
+                worksheet.cell(row=row_num, column=4).value = str(sim.terminal_date)
+                worksheet.cell(row=row_num, column=5).value = str(sim.devices_brand)
+                worksheet.cell(row=row_num, column=6).value = str(sim.sys_mon)
+                worksheet.cell(row=row_num, column=7).value = str(sim.contragent)
+                worksheet.cell(row=row_num, column=8).value = str(sim.itprogrammer)
+                row_num += 1
+
+            # Set content type and attachment filename
+            response = HttpResponse(content_type='application/vnd.ms-excel')
+            response['Content-Disposition'] = 'attachment; filename=terminal.xlsx'
+
+            # Write workbook to response
+            workbook.save(response)
+            return response
+
+class DeviceBrandsAdmin(LoginRequiredMixin,admin.ModelAdmin):
     list_display = (
             "name",
             "devices_vendor",
@@ -806,6 +967,11 @@ class SensorBrandsAdmin(admin.ModelAdmin):
             'sensor_vendor__id',
             )
 
+    search_fields = (
+            "name",
+            "sensor_vendor__vendor_name",
+    )
+
 
     autocomplete_fields = (
         'sensor_vendor',
@@ -831,6 +997,65 @@ class SensorVendorAdmin(admin.ModelAdmin):
             "name",
     )
 
+
+class DeviceDiagnosicAdmin(admin.ModelAdmin):
+    list_display = (
+            "device",
+            "get_imei",
+            "get_klient",
+            "programmer",
+            "brought",
+            "comment",
+            "accept_date",
+            "transfer_date",
+            "whom_tranfer",
+
+            )
+    add_fieldsets = (
+            (None, {
+                'classes': ('wide',),
+                'fields': (
+                    "device",
+                    "programmer",
+                    "brought",
+                    "comment",
+                    "transfer_date",
+                    "whom_tranfer",
+
+                )
+            })
+    )
+    list_filter = (
+            'programmer',
+            'brought',
+            'whom_tranfer',
+            )
+    search_fields = (
+            "comment",
+            "device__device_serial",
+            "device__contragent__ca_name",
+            "device__device_imei",
+    )
+    autocomplete_fields = (
+        'device',
+    )
+    date_hierarchy = 'transfer_date'
+
+
+    def get_klient(self, obj):
+        return obj.device.contragent.ca_name
+
+    get_klient.short_description = 'Клиент'
+
+    def get_imei(self, obj):
+        return obj.device.device_imei
+
+    get_imei.short_description = 'IMEI'
+
+#    readonly_fields = ('accept_date',)
+
+
+
 admin.site.register(Contragents, ContragentsAdmin)
 admin.site.register(LoginUsers, LoginUsersAdmin)
 admin.site.register(GlobalLogging, GlobalLogAdmin)
@@ -849,3 +1074,4 @@ admin.site.register(ObjectSensors, ObjectSensorsAdmin)
 admin.site.register(EquipmentWarehouse, WarehouseAdmin)
 admin.site.register(SensorBrands, SensorBrandsAdmin)
 admin.site.register(SensorVendor, SensorVendorAdmin)
+admin.site.register(DevicesDiagnostics, DeviceDiagnosicAdmin)
