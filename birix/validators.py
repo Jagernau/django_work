@@ -1,3 +1,4 @@
+from os import walk
 import re
 from django.core.exceptions import ValidationError
 from django.utils.translation import gettext_lazy as _
@@ -16,28 +17,23 @@ def validate_sim_iccid_number(value):
 def validate_password(value):
     if not re.search(r'[A-Z]', value):
         raise ValidationError(
-            _('Password must contain a capital letter.'),
+            _('Пароль должен содержать хотя бы одну заглавную букву.'),
             code='invalid_password_capital_letter'
             )
     if not re.search(r'[\W_]', value):
         raise ValidationError(
-            _('Password must contain a special simbol.'),
+            _('Пароль должен содержать хотя бы один спец. символ.'),
             code='invalid_password_special_simbol'
             )
     if not re.search(r'[0-9]',value):
         raise ValidationError(
-            _('Password must contain a number.'),
+            _('Пароль должен содержать хотя бы одну цифру.'),
             code='invalid_password_number'
             )
 def validate_login(value):
-    if '.' not in value:
+    if '.' not in value or '@' not in value:
         raise ValidationError(
-            _('Incorrect email.'),
-            code='invalid_email'
-            )
-    if '@' not in value:
-        raise ValidationError(
-            _('Incorrect email.'),
+            _('Неверный формат email.'),
             code='invalid_email'
             )
 

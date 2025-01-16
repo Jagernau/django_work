@@ -1,11 +1,16 @@
 from django.contrib import admin
+from django.contrib import messages
+from birix.sendmail import sendmailclient, sendmailmanager
 from birix.models import *
-from django import forms
-from django.http import HttpResponse
-from openpyxl import Workbook
-import ast
+from django.http import HttpResponse, HttpResponseRedirect, JsonResponse
 from django.contrib.auth.mixins import LoginRequiredMixin
 import openpyxl
+from datetime import datetime, timedelta
+from django.utils.html import format_html
+import pytz
+from django.urls import reverse, path
+from django.utils.safestring import mark_safe
+
 
 
 class ContragentsAdmin(LoginRequiredMixin, admin.ModelAdmin):
@@ -76,9 +81,10 @@ class ContragentsAdmin(LoginRequiredMixin, admin.ModelAdmin):
             return response
 
 
+
 class LoginUsersAdmin(LoginRequiredMixin,admin.ModelAdmin):
 
-    actions = ['download_excel',]
+    actions = ['download_excel', 'send_access_mail_manager', 'send_access_mail_client']
 
     list_display = (
             "login",
@@ -135,6 +141,59 @@ class LoginUsersAdmin(LoginRequiredMixin,admin.ModelAdmin):
     autocomplete_fields = ('contragent',)
     list_per_page = 20
 
+# Отправка сообщений с данными для входа по чекбоксам
+    def send_access_mail_manager(self, request, queryset):
+        for obj in queryset:
+            try:
+                manager_name = obj.contragent.key_manager
+                contragent_name = obj.contragent.ca_name
+                manager_email = CaContacts.objects.filter(ca_contact_surname = str(manager_name).split(' ')[0]).first().ca_contact_email
+                system_url = obj.system.mon_url
+            except Exception as e:
+                messages.error(request, f'Ошибка, у контрагента не указан менеджер.{e}.')
+            else:
+                try:
+                #Отправка менеджеру
+                    sendmailmanager(manager_email, obj.login, obj.password, contragent_name, system_url, request.user.last_name)
+                    obj.account_status = 2
+                    obj.save()
+                #Отправка создателю
+                    sendmailmanager(request.user.email, obj.login, obj.password, contragent_name, system_url, request.user.last_name)
+                #Отправка начальству
+                    if request.user.username != 'alexandr_master':
+                        sendmailmanager('it5@suntel-nn.ru', obj.login, obj.password, contragent_name, system_url, request.user.last_name)
+                    messages.success(request, f'Письмо успешно отправлено менеджеру {manager_name} для {contragent_name}.')
+                except Exception as e:
+                    messages.error(request, f'Ошибка при отправке письма: {e}.')
+        return None
+
+# Отправка сообщений с данными для входа по чекбоксам
+    def send_access_mail_client(self, request, queryset):
+        for obj in queryset:
+            try:
+                contragent_name = obj.contragent.ca_name
+                system_url = obj.system.mon_url
+                mon_system_name = obj.system.mon_sys_name
+            except Exception as e:
+                messages.error(request, f'Ошибка, неправильно заполнена форма клиента (в 1с).{e}.')
+            else:
+                try:
+                #Отправка клиенту
+                    sendmailclient(obj.email, obj.login, obj.password, mon_system_name, system_url)
+                #Отправка начальству
+                    sendmailclient('it5@suntel-nn.ru', obj.login, obj.password, contragent_name, system_url)
+                    obj.account_status = 2
+                    obj.save()
+                    messages.success(request, f'Письмо успешно отправлено для {contragent_name}.')
+                except Exception as e:
+                    messages.error(request, f'Ошибка при отправке письма: {e}.')
+        return None
+    
+
+
+
+
+
     def download_excel(self, request, queryset):
             workbook = openpyxl.Workbook()
             worksheet = workbook.active
@@ -184,6 +243,8 @@ class CaObjectsAdmin(LoginRequiredMixin,admin.ModelAdmin):
             "imei",
             "get_device",
             "get_sim",
+            "sys_mon_object_id",
+            "upload_button",
             )
 
     list_filter = (
@@ -226,6 +287,7 @@ class CaObjectsAdmin(LoginRequiredMixin,admin.ModelAdmin):
                         Devices.objects.filter(device_imei=obj.imei).first().device_serial,
                         Devices.objects.filter(device_imei=obj.imei).first().devices_brand,
                         ]
+
     def get_sim(self, obj):
         if SimCards.objects.filter(terminal_imei=obj.imei).first():
             if obj.imei == None:
@@ -242,6 +304,10 @@ class CaObjectsAdmin(LoginRequiredMixin,admin.ModelAdmin):
     get_device.short_description = 'Терминал'
     get_sim.short_description = 'Симкарта'
 
+
+    def upload_button(self, obj):
+        return mark_safe(f'<a class="button" href="{reverse("upload_file", args=[obj.id])}">Загрузить</a>')
+    upload_button.short_description = 'Загрузить файл'
 
     def download_excel(self, request, queryset):
             workbook = openpyxl.Workbook()
@@ -277,10 +343,9 @@ class CaObjectsAdmin(LoginRequiredMixin,admin.ModelAdmin):
 class GlobalLogAdmin(LoginRequiredMixin,admin.ModelAdmin):
     list_display = (
             "section_type",
+            "get_top_info",
             "get_obj_client",
             "field",
-#            "old_value",
-#            "new_value",
             "get_status_old",
             "get_status_new",
             "change_time",
@@ -299,8 +364,6 @@ class GlobalLogAdmin(LoginRequiredMixin,admin.ModelAdmin):
             "section_type",
             "edit_id",
             "field",
-            "old_value",
-            "new_value",
             "change_time",
             "sys_id",
             "action",
@@ -321,6 +384,7 @@ class GlobalLogAdmin(LoginRequiredMixin,admin.ModelAdmin):
     )
     list_per_page = 20
     date_hierarchy = 'change_time'
+
 
     def get_obj_client(self, obj):
         if obj.section_type == 'object':
@@ -351,6 +415,22 @@ class GlobalLogAdmin(LoginRequiredMixin,admin.ModelAdmin):
                 return 'Деактивирован'
             else:
                 return obj.old_value
+
+        if obj.section_type == 'sim_card' and obj.field == 'status':
+            if obj.old_value == "0":
+                return 'Списана'
+            if obj.old_value == "1":
+                return 'Активна'
+            if obj.old_value == "2":
+                return 'Приостановлена'
+            if obj.old_value == "3":
+                return 'Первичная блокировка'
+            if obj.old_value == "4":
+                return 'Статус не известен'
+            if obj.old_value == "5":
+                return 'Сезонная блокировка'
+            else:
+                return obj.old_value
         else:
             return obj.old_value
 
@@ -374,12 +454,47 @@ class GlobalLogAdmin(LoginRequiredMixin,admin.ModelAdmin):
                 return 'Деактивирован'
             else:
                 return obj.new_value
+
+        if obj.section_type == 'sim_card' and obj.field == 'status':
+            if obj.new_value == "0":
+                return 'Списана'
+            if obj.new_value == "1":
+                return 'Активна'
+            if obj.new_value == "2":
+                return 'Приостановлена'
+            if obj.new_value == "3":
+                return 'Первичная блокировка'
+            if obj.new_value == "4":
+                return 'Статус не известен'
+            if obj.new_value == "5":
+                return 'Сезонная блокировка'
+            else:
+                return obj.new_value
         else:
             return obj.new_value
+
+
+
+    def get_top_info(self, obj):
+        info_id = obj.edit_id
+        section = obj.section_type
+
+        if section == "sim_card":
+            sim = SimCards.objects.filter(sim_id=info_id).first()
+            if sim:
+                return sim.sim_iccid 
+
+        if section == "object":
+            obj = CaObjects.objects.filter(id=info_id).first()
+            if obj:
+                return obj.object_name
+
+
 
     get_obj_client.short_description = "Контрагент"
     get_status_old.short_description = "Старое значение"
     get_status_new.short_description = "Новое значение"
+    get_top_info.short_description = "Детализация"
 
 
 
@@ -392,14 +507,15 @@ class SimCardsAdmin(LoginRequiredMixin,admin.ModelAdmin):
             "sim_iccid",
             "sim_tel_number",
             "sim_cell_operator",
-            "sim_owner",
             "sim_date",
             "contragent",
-            "terminal_imei",
             'itprogrammer',
+            'status',
+            'block_start',
+            "get_end_date",
+            "sim_owner",
+            "terminal_imei",
             'get_device',
-            'status'
-
             )
 
     list_filter = (
@@ -408,8 +524,7 @@ class SimCardsAdmin(LoginRequiredMixin,admin.ModelAdmin):
             "sim_date",
             'itprogrammer',
             'status',
-            "contragent",
-
+            "block_start",
             )
     search_fields = (
             "sim_iccid",
@@ -420,6 +535,7 @@ class SimCardsAdmin(LoginRequiredMixin,admin.ModelAdmin):
             "sim_date",
             "contragent__ca_name",
             "terminal_imei",
+            "block_start",
             )
     fieldsets = (
             (None, {
@@ -455,22 +571,44 @@ class SimCardsAdmin(LoginRequiredMixin,admin.ModelAdmin):
                 )
             })
     )
-    # raw_id_fields = (
-    #     'contragent',
-    # )
     autocomplete_fields = (
         'contragent',
     )
     list_per_page = 20
     date_hierarchy = 'sim_date'
 
+    def get_queryset(self, request):
+        qs = super().get_queryset(request)
+        return qs.order_by('-sim_date')
+
     def get_device(self, obj):
         if Devices.objects.filter(device_imei=obj.terminal_imei).first():
             if obj.terminal_imei == Devices.objects.filter(device_imei=obj.terminal_imei).first().device_imei:
                 return Devices.objects.filter(device_imei=obj.terminal_imei).first().device_serial
 
-    get_device.short_description = 'Серийный номер устройства'
-#    list_display_links = ('get_device',)
+    def get_end_date(self, obj):
+        if obj.block_start:
+            # Получаем текущую дату с учетом временной зоны
+            current_date = datetime.now(pytz.utc)  # Используем UTC или вашу локальную временную зону
+            # Приводим block_start к UTC, если он offset-aware
+            if obj.block_start.tzinfo is None:
+                block_start = obj.block_start.replace(tzinfo=pytz.utc)  # Присваиваем временную зону
+            else:
+                block_start = obj.block_start
+
+            # Вычисляем дату окончания блокировки
+            end_date = block_start + timedelta(days=180)  # 180 дней = 6 месяцев
+            
+            # Проверяем, превышает ли дата окончания текущую дату
+            if end_date < current_date:
+                return format_html('<span style="color: red;">{}</span>', end_date.strftime('%Y-%m-%d'))
+            
+            return end_date.strftime('%Y-%m-%d')
+        
+        return None
+
+    get_device.short_description = 'Сер. терм'
+    get_end_date.short_description = 'Окончание блокировки'
 
     def download_excel(self, request, queryset):
             workbook = openpyxl.Workbook()
@@ -478,7 +616,7 @@ class SimCardsAdmin(LoginRequiredMixin,admin.ModelAdmin):
             worksheet.title = "SimCards Data"
 
             # Write headers
-            header_row = ["sim_iccid", "sim_tel_number", "client_name", "sim_cell_operator", "sim_owner", "sim_date", "contragent", "terminal_imei", "itprogrammer", "status"]
+            header_row = ["sim_iccid", "sim_tel_number", "client_name", "sim_cell_operator", "sim_owner", "sim_date", "contragent", "terminal_imei", "itprogrammer", "status", "block_start"]
             for col_num, header in enumerate(header_row, 1):
                 worksheet.cell(row=1, column=col_num).value = header
 
@@ -495,6 +633,7 @@ class SimCardsAdmin(LoginRequiredMixin,admin.ModelAdmin):
                 worksheet.cell(row=row_num, column=8).value = str(sim.terminal_imei)
                 worksheet.cell(row=row_num, column=9).value = str(sim.itprogrammer)
                 worksheet.cell(row=row_num, column=10).value = str(sim.status)
+                worksheet.cell(row=row_num, column=10).value = str(sim.block_start)
                 row_num += 1
 
             # Set content type and attachment filename
@@ -512,7 +651,8 @@ class DevicesAdmin(LoginRequiredMixin,admin.ModelAdmin):
     list_display = (
             "device_serial",
             "device_imei",
-            "client_name",
+            "device_owner",
+#            "client_name",
             "terminal_date",
             "devices_brand",
             "sys_mon",
@@ -527,6 +667,7 @@ class DevicesAdmin(LoginRequiredMixin,admin.ModelAdmin):
             'itprogrammer',
             "devices_brand__devices_vendor",
             "sys_mon",
+            "device_owner",
             )
     search_fields = (
             "device_serial",
@@ -541,6 +682,7 @@ class DevicesAdmin(LoginRequiredMixin,admin.ModelAdmin):
                 'fields': (
                     'device_serial',
                     'device_imei',
+                    "device_owner",
                     'terminal_date',
                     'devices_brand',
                     'sys_mon',
@@ -555,6 +697,7 @@ class DevicesAdmin(LoginRequiredMixin,admin.ModelAdmin):
                 'fields': (
                     'device_serial',
                     'device_imei',
+                    "device_owner",
                     'terminal_date',
                     'devices_brand',
                     'sys_mon',
@@ -570,6 +713,38 @@ class DevicesAdmin(LoginRequiredMixin,admin.ModelAdmin):
     )
     list_per_page = 20
     date_hierarchy = 'terminal_date'
+
+    def formfield_for_foreignkey(self, db_field, request, **kwargs):
+        if db_field.name == "devices_brand":
+            kwargs["queryset"] = DevicesBrands.objects.all().order_by('name')
+        return super().formfield_for_foreignkey(db_field, request, **kwargs)
+
+    def get_urls(self):
+        urls = super().get_urls()
+        custom_urls = [
+            path('save_form/', self.admin_site.admin_view(self.save_form), name='save_form'),
+        ]
+        return custom_urls + urls
+
+    def handle_save_form(self, request):
+        if request.method == "POST":
+            data = request.POST.dict()
+            data.pop('device_serial', None)
+            data.pop('device_imei', None)
+            request.session['form_data'] = data
+            return JsonResponse({'success': True})
+        return JsonResponse({'success': False})
+
+    def add_view(self, request, form_url='', extra_context=None):
+        if request.method == "GET" and 'form_data' in request.session:
+            form_data = request.session.pop('form_data')
+            form = self.get_form(request)(initial=form_data)
+        else:
+            form = self.get_form(request)()
+        
+        return super().add_view(request, form_url, extra_context={'form': form})
+
+
 
     def get_sim(self, obj):
         if SimCards.objects.filter(terminal_imei=obj.device_imei).first():
@@ -656,6 +831,7 @@ class ContactsAdmin(admin.ModelAdmin):
 
     list_display = (
             "ca_contact_cell_num",
+            "ca_contact_email",
             "ca_contact_name",
             "ca_contact_surname",
             "ca",
@@ -666,6 +842,7 @@ class ContactsAdmin(admin.ModelAdmin):
             (None, {
                 'fields': (
                     'ca_contact_cell_num',
+                    'ca_contact_email',
                     'ca_contact_name',
                     'ca_contact_surname',
                     'ca',
@@ -680,6 +857,7 @@ class ContactsAdmin(admin.ModelAdmin):
                 'classes': ('wide',),
                 'fields': (
                     'ca_contact_cell_num',
+                    'ca_contact_email',
                     'ca_contact_name',
                     'ca_contact_surname',
                     'ca',
@@ -690,6 +868,7 @@ class ContactsAdmin(admin.ModelAdmin):
 
     search_fields = (
             "ca_contact_cell_num",
+            "ca_contact_email"
             "ca_contact_name",
             "ca_contact_surname",
             "ca",
@@ -800,6 +979,7 @@ class MonitoringSystemAdmin(admin.ModelAdmin):
             "mon_sys_name",
             "mon_sys_ca_obj_price_default",
             "mon_sys_obj_price_suntel",
+            "mon_url",
 
             )
     add_fieldsets = (
@@ -809,6 +989,7 @@ class MonitoringSystemAdmin(admin.ModelAdmin):
                     'vendor_name',
                     "mon_sys_ca_obj_price_default",
                     "mon_sys_obj_price_suntel",
+                    'mon_url',
 
                 )
             })
@@ -840,6 +1021,7 @@ class GroupObjectRetransAdmin(admin.ModelAdmin):
     list_display = (
             "obj",
             "retr",
+            "client_name"
 
             )
     add_fieldsets = (
@@ -854,13 +1036,18 @@ class GroupObjectRetransAdmin(admin.ModelAdmin):
     )
     list_filter = (
             "retr",
-            'obj__contragent_id'
             )
 
 
     autocomplete_fields = (
         'obj',
     )
+
+    search_fields = (
+            "obj__object_name",
+            "obj__contragent_id__ca_name"
+            )
+
 
 class ObjectSensorsAdmin(admin.ModelAdmin):
     list_display = (
@@ -1055,6 +1242,139 @@ class DeviceDiagnosicAdmin(admin.ModelAdmin):
 #    readonly_fields = ('accept_date',)
 
 
+class OnecContractsAdmin(admin.ModelAdmin):
+    list_display = (
+            "name_contract",
+            "contract_number",
+            "contract_date",
+            "contract_status",
+            "organization",
+            "counterparty",
+            "contract_purpose",
+            "type_calculations",
+            "category",
+            "manager",
+            "subdivision",
+            "contact_person",
+            "detailed_calculations",
+            "ok_desk_id",
+            )
+    add_fieldsets = (
+            (None, {
+                'classes': ('wide',),
+                'fields': (
+                    "name_contract",
+                    "contract_number",
+                    "contract_date",
+                    "contract_status",
+                    "organization",
+                    "partner",
+                    "counterparty",
+                    "contract_commencement_date",
+                    "contract_expiration_date",
+                    "contract_purpose",
+                    "type_calculations",
+                    "category",
+                    "manager",
+                    "subdivision",
+                    "contact_person",
+                    "organization_bank_account",
+                    "counterparty_bank_account",
+                    "detailed_calculations",
+                    "unique_partner_identifier",
+                    "unique_counterparty_identifier",
+                    "ok_desk_id",
+                )
+            })
+    )
+    list_filter = (
+
+            "contract_date",
+            "contract_status",
+ 
+            "contract_purpose",
+            "type_calculations",
+            "category",
+            "manager",
+            )
+    search_fields = (
+            "name_contract",
+            "contract_number",
+            "contract_status",
+            "organization",
+            "counterparty",
+            "manager",
+            "subdivision",
+            "contact_person",
+            "organization_bank_account",
+            "counterparty_bank_account",
+            "detailed_calculations",
+    )
+
+
+class InfoServObjAdmin(admin.ModelAdmin):
+    list_display = (
+            "serv_obj_sys_mon",
+            "info_obj_serv",
+            "subscription_start",
+            "subscription_end",
+            "tel_num_user",
+            "service_counter",
+            "stealth_type",
+            "monitoring_sys",
+            "sys_id_obj",
+            "sys_login",
+            "sys_password",
+
+            )
+    add_fieldsets = (
+            (None, {
+                'classes': ('wide',),
+                'fields': (
+                    "serv_obj_sys_mon",
+                    "info_obj_serv",
+                    "subscription_start",
+                    "subscription_end",
+                    "tel_num_user",
+                    "service_counter",
+                    "stealth_type",
+                    "monitoring_sys",
+                    "sys_id_obj",
+                    "sys_login",
+                    "sys_password",
+                )
+            })
+    )
+    list_filter = (
+                    "info_obj_serv",
+                    "subscription_start",
+                    "subscription_end",
+                    "tel_num_user",
+                    "service_counter",
+                    "stealth_type",
+                    "monitoring_sys",
+                    "sys_id_obj",
+                    "sys_login",
+                    "sys_password",
+            )
+    search_fields = (
+                    "serv_obj_sys_mon",
+                    "info_obj_serv",
+                    "subscription_start",
+                    "subscription_end",
+                    "tel_num_user",
+                    "service_counter",
+                    "stealth_type",
+                    "monitoring_sys",
+                    "sys_id_obj",
+                    "sys_login",
+                    "sys_password",
+    )
+    date_hierarchy = 'subscription_start'
+    autocomplete_fields = (
+        'serv_obj_sys_mon',
+    )
+
 
 admin.site.register(Contragents, ContragentsAdmin)
 admin.site.register(LoginUsers, LoginUsersAdmin)
@@ -1070,8 +1390,10 @@ admin.site.register(DevicesVendor, DeviceVendorAdmin)
 admin.site.register(MonitoringSystem, MonitoringSystemAdmin)
 admin.site.register(ObjectRetranslators, ObjectRetranslatorsAdmin)
 admin.site.register(GroupObjectRetrans, GroupObjectRetransAdmin)
-admin.site.register(ObjectSensors, ObjectSensorsAdmin)
-admin.site.register(EquipmentWarehouse, WarehouseAdmin)
-admin.site.register(SensorBrands, SensorBrandsAdmin)
-admin.site.register(SensorVendor, SensorVendorAdmin)
+#admin.site.register(ObjectSensors, ObjectSensorsAdmin)
+#admin.site.register(EquipmentWarehouse, WarehouseAdmin)
+#admin.site.register(SensorBrands, SensorBrandsAdmin)
+#admin.site.register(SensorVendor, SensorVendorAdmin)
 admin.site.register(DevicesDiagnostics, DeviceDiagnosicAdmin)
+admin.site.register(OnecContracts, OnecContractsAdmin)
+admin.site.register(InfoServObj, InfoServObjAdmin)

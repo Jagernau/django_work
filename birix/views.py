@@ -13,6 +13,13 @@ import pandas as pd
 from django.contrib.auth.decorators import user_passes_test
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.db.models import Count
+from django.contrib import messages
+import yadisk
+import os
+from birix.models import CaObjects
+from birix.forms import UploadFileForm
+from django.shortcuts import render
+
 
 @login_required
 @user_passes_test(lambda u: u.is_superuser)
@@ -297,3 +304,56 @@ def get_stock(request):
 
             }
             )
+
+
+@login_required
+def upload_file_view(request, object_id):
+    ca_object = CaObjects.objects.get(id=object_id)
+    if request.method == 'POST':
+        form = UploadFileForm(request.POST, request.FILES)
+        if form.is_valid():
+            uploaded_file = request.FILES['file']
+            selected_date = form.cleaned_data['date']
+            formatted_date = selected_date.strftime('%d.%m.%Y')
+            file_name = f"{ca_object.object_name}_{formatted_date}"
+
+            # Upload the file to Yandex Disk
+            upload_result = upload_to_yandex_disk(request, uploaded_file, ca_object.owner_contragent, file_name)
+            
+            if upload_result is True:
+                messages.success(request, "Файл успешно отправлен на диск")
+            else:
+                messages.error(request, upload_result)  # Display the error message returned from the function
+        else:
+            messages.error(request, "Ошибка валидации формы. Пожалуйста, проверьте введенные данные.")
+    else:
+        form = UploadFileForm(initial={'object_name': ca_object.object_name})
+
+    return render(request, 'upload.html', {'form': form})
+
+def upload_to_yandex_disk(request, uploaded_file, owner_contragent, file_name):
+    TOKEN = os.getenv('TOKEN_YANDEX')
+    y = yadisk.YaDisk(token=TOKEN)
+
+    if not y.check_token():
+        return "Токен недействителен."
+
+    folder_path = f"/Автотарировки/{owner_contragent}"
+
+    try:
+        if not y.is_dir(folder_path):
+            y.mkdir(folder_path)  # Create folder if it doesn't exist
+            messages.success(request, f'Папка "{folder_path}" создана.')
+        else:
+            messages.info(request, f'Папка "{folder_path}" уже существует.')
+
+        yandex_disk_path = f"{folder_path}/{file_name}.png"
+
+        # Upload the file to Yandex Disk
+        with uploaded_file.open('rb') as f:
+            y.upload(f, yandex_disk_path)
+
+    except Exception as e:
+        return f"Ошибка при работе с Яндекс Диском: {e}"
+    
+    return True

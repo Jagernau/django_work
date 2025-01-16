@@ -6,6 +6,7 @@
 #   * Remove `managed = False` lines if you wish to allow Django to create, modify, and delete the table
 # Feel free to rename the models, but don't rename db_table values or field names.
 from django.db import models
+from django.core.exceptions import ValidationError
 from birix.validators import validate_login, validate_password, validate_sim_tel_number, validate_sim_iccid_number
 
 
@@ -156,6 +157,7 @@ class LoginUsers(models.Model):
         if_active = 1, 'Не подверждена но активирована'
         inactive = 0, "Заблокирована"
         verified = 2, 'Подверждена и активирована'
+        testing = 3, "Тестовая"
 
     client_name = models.CharField(
             max_length=200, 
@@ -168,7 +170,6 @@ class LoginUsers(models.Model):
             blank=True, 
             null=False,
             verbose_name='Логин',
-            validators=[validate_login],
             )
     email = models.CharField(
             max_length=60, 
@@ -180,7 +181,6 @@ class LoginUsers(models.Model):
             blank=True, 
             null=False,
             verbose_name='Пароль',
-            validators=[validate_password],
             )
     date_create = models.DateField(
             blank=True,
@@ -223,6 +223,13 @@ class LoginUsers(models.Model):
             verbose_name='Статус аккаунта',
             choices=StatusChoices.choices,
             )
+    def clean(self):
+        super().clean()
+        login_str = str(self.login)
+        password_str = str(self.password)
+        if self.pk is None:
+            validate_login(login_str)
+            validate_password(password_str)
 
 
     class Meta:
@@ -436,14 +443,6 @@ class CaObjects(models.Model):
             db_comment='Статус объекта ссылается к статусам',
             verbose_name='Статус объекта',
             )
-    object_add_date = models.DateTimeField(blank=True, null=True, db_comment='Дата добавления объекта')
-    object_last_message = models.DateTimeField(
-            blank=True,
-            null=True,
-            db_comment='Дата последнего сообщения',
-            verbose_name='Дата последнего сообщения',
-            )
-    object_margin = models.IntegerField(blank=True, null=True, db_comment='Надбавка к базовой цене объекта')
     owner_contragent = models.CharField(
             max_length=200, 
             blank=True, 
@@ -465,8 +464,6 @@ class CaObjects(models.Model):
             db_comment='идентификатор терминала',
             verbose_name='IMEI терминала',
             )
-    updated = models.DateTimeField(blank=True, null=True, db_comment='Когда изменён')
-    object_created = models.DateTimeField(blank=True, null=True, db_comment='Дата создания в системе мониторинга ')
     parent_id_sys = models.CharField(max_length=200, blank=True, null=True, db_comment='Id клиента в системе мониторинга')
     contragent = models.ForeignKey(
             Contragents, 
@@ -475,7 +472,6 @@ class CaObjects(models.Model):
             null=True,
             verbose_name='Контрагент как в 1С',
             )
-    ca_uid = models.CharField(max_length=100, blank=True, null=True, db_comment='Уникальный id контрагента')
 
     class Meta:
         managed = False
@@ -500,6 +496,10 @@ class ClientsInSystemMonitor(models.Model):
 
 
 class Devices(models.Model):
+    class Owner(models.IntegerChoices):
+        ME = 1, 'Мы'
+        CLIENT = 0, 'Клиент'
+
     device_id = models.AutoField(primary_key=True)
     device_serial = models.CharField(
             max_length=100,
@@ -575,6 +575,14 @@ class Devices(models.Model):
             null=True,
             verbose_name='Программист',
             )
+    device_owner = models.IntegerField(
+            blank=True,
+            null=True,
+            db_comment='Владелец терминала (мы или клиент)',
+            verbose_name='Мы или клиент',
+            choices=Owner.choices
+            )
+
 
     class Meta:
         managed = False
@@ -736,6 +744,7 @@ class DjangoAdminLog(models.Model):
     change_message = models.TextField(verbose_name='Изменения')
     content_type = models.ForeignKey('DjangoContentType', models.DO_NOTHING, blank=True, null=True, verbose_name="Тип")
     user = models.ForeignKey(AuthUser, models.DO_NOTHING, verbose_name='Пользователь')
+
 
     class Meta:
         managed = False
@@ -1011,6 +1020,13 @@ class MonitoringSystem(models.Model):
             db_comment='Базовая стоимость объекта для Контрагента',
             verbose_name='Базовая стоимость объекта для Контрагента',
             )
+    mon_url = models.CharField(
+            max_length=200,
+            blank=True,
+            null=True,
+            db_comment='Адресс Системы мониторинга',
+            verbose_name='Адресс системы мониторинга',
+            )
 
     class Meta:
         managed = False
@@ -1205,6 +1221,7 @@ class SimCards(models.Model):
         STOP = 2, 'Приостановлена'
         INITIAL_BLOCKING = 3, 'Первоночальная блокировка'
         DEF_STATUS = 4, 'Статус не известен'
+        SESON_STATUS = 5, 'Сезонная блокировка'
 
     sim_id = models.AutoField(primary_key=True)
     sim_iccid = models.CharField(
@@ -1221,7 +1238,7 @@ class SimCards(models.Model):
             blank=True, 
             null=True, 
             db_comment='телефонный номер сим',
-            verbose_name='Телефонный номер сим',
+            verbose_name='Телефонный номер',
             validators=[validate_sim_tel_number]
             )
     client_name = models.CharField(
@@ -1266,7 +1283,7 @@ class SimCards(models.Model):
             blank=True,
             null=True,
             db_comment='IMEI терминала в который вставлена симка',
-            verbose_name='IMEI терминала в котором симка',
+            verbose_name='IMEI терм.',
             )
     contragent = models.ForeignKey(
             Contragents, 
@@ -1283,9 +1300,14 @@ class SimCards(models.Model):
             blank=True,
             null=True, 
             db_comment='ID сотрудника програмировавшего терминал',
-            verbose_name='Сотрудник активировавший СИМ',
+            verbose_name='Сотрудник',
             )
-
+    block_start = models.DateTimeField(
+            blank=True, 
+            null=True, 
+            db_comment='Дата блокировки сим',
+            verbose_name='Дата блокировки сим',
+            )
     class Meta:
         managed = False
         db_table = 'sim_cards'
@@ -1310,9 +1332,210 @@ class GroupObjectRetrans(models.Model):
             verbose_name='Ретрансляция',
             )
 
+    @property
+    def client_name(self):
+        if self.obj_id is None:
+            return "Клиент не найден"
+        return self.obj.contragent.ca_name
+
     class Meta:
         managed = False
         db_table = 'group_object_retrans'
         db_table_comment = 'Таблица для сведения объектов и ретрансляторов'
         verbose_name = 'Привязка объектов к ретрансляторам'
         verbose_name_plural = 'Привязки объектов к рентрансляторам'
+
+
+class OnecContracts(models.Model):
+    contract_id = models.AutoField(primary_key=True)
+    name_contract = models.CharField(
+            max_length=100,
+            blank=True,
+            null=True,
+            db_comment='НаименованиеДоговора',
+            verbose_name='Наименование договора',
+            )
+    contract_number = models.CharField(
+            max_length=100,
+            blank=True,
+            null=True,
+            db_comment='НомерДоговора',
+            verbose_name='Номер договора',
+            )
+    contract_date = models.DateField(
+            blank=True, 
+            null=True, 
+            db_comment='ДатаДоговора',
+            verbose_name='Дата договора',
+            )
+    contract_status = models.CharField(
+            max_length=100,
+            blank=True,
+            null=True,
+            db_comment='Статус',
+            verbose_name='Статус',
+            )
+    organization = models.CharField(
+            max_length=100,
+            blank=True,
+            null=True,
+            db_comment='Организация',
+            verbose_name='Организация',
+            )
+    partner = models.CharField(
+            max_length=100,
+            blank=True,
+            null=True,
+            db_comment='Партнер',
+            verbose_name='Партнер',
+            )
+    counterparty = models.CharField(
+            max_length=100,
+            blank=True,
+            null=True,
+            db_comment='Контрагент',
+            verbose_name='Контрагент',
+            )
+    contract_commencement_date = models.DateField(
+            blank=True, 
+            null=True, 
+            db_comment='ДатаНачалаДоговора',
+            verbose_name='Дата начала договора',
+            )
+    contract_expiration_date = models.DateField(
+            blank=True, 
+            null=True, 
+            db_comment='ДатаОкончанияДоговора',
+            verbose_name='Дата окончания договора',
+            )
+    contract_purpose = models.CharField(
+            max_length=100,
+            blank=True,
+            null=True,
+            db_comment='Цель',
+            verbose_name='Цель',
+            )
+    type_calculations = models.CharField(
+            max_length=100,
+            blank=True,
+            null=True,
+            db_comment='ВидРасчетов',
+            verbose_name='Вид расчетов',
+            )
+    category = models.CharField(
+            max_length=100,
+            blank=True,
+            null=True,
+            db_comment='Категория',
+            verbose_name='Категория',
+            )
+    manager = models.CharField(
+            max_length=100,
+            blank=True,
+            null=True,
+            db_comment='Менеджер',
+            verbose_name='Менерджер',
+            )
+    subdivision = models.CharField(
+            max_length=100,
+            blank=True,
+            null=True,
+            db_comment='Подразделение',
+            verbose_name='Подразделение',
+            )
+    contact_person = models.CharField(
+            max_length=100,
+            blank=True,
+            null=True,
+            db_comment='КонтактноеЛицо',
+            verbose_name='Контактное лицо',
+            )
+    organization_bank_account = models.CharField(
+            max_length=100,
+            blank=True,
+            null=True,
+            db_comment='БанковскийСчетОрганизации',
+            verbose_name='Банковский счет организации',
+            )
+    counterparty_bank_account = models.CharField(
+            max_length=100,
+            blank=True,
+            null=True,
+            db_comment='БанковскийСчетКонтрагента',
+            verbose_name='Банковский счет контрагента',
+            )
+    detailed_calculations = models.CharField(
+            max_length=100,
+            blank=True,
+            null=True,
+            db_comment='ДетализацияРасчетов',
+            verbose_name='Детализация расчетов',
+            )
+    unique_partner_identifier = models.CharField(
+            max_length=100,
+            blank=True,
+            null=True,
+            db_comment='УникальныйИдентификаторПартнера',
+            )
+    ok_desk_id = models.IntegerField(
+            blank=True,
+            null=True,
+            db_comment='ID в ОК-деск',
+            verbose_name='ID в ОК-деск',
+            )
+    class Meta:
+        managed = False
+        db_table = 'onec_contracts'
+        verbose_name = 'Договоры'
+        verbose_name_plural = 'Договоры'
+
+
+class InfoServObj(models.Model):
+
+    class Counter(models.IntegerChoices):
+        FLASH = 0, 'Мгновенно'
+        DAY = 1, 'За предыдущий день'
+        WEEK = 2, 'За неделю'
+        MONTH = 3, 'За предыдущий месяц'
+
+    class Stelth(models.IntegerChoices):
+        AUTO = 0, 'Отправка без проверки'
+        CHECK = 1, 'Проверить ИТ специалистом'
+
+    serv_obj_id = models.AutoField(primary_key=True, db_comment='ID подписки')
+    serv_obj_sys_mon = models.ForeignKey(CaObjects, models.DO_NOTHING, db_comment='Внутренний ID объекта\r\nБазы данных из СМ',verbose_name='Объект')
+    info_obj_serv = models.ForeignKey('InformationServices', models.DO_NOTHING, db_comment='ID ведёт сервисам', verbose_name='Сервис')
+    subscription_start = models.DateTimeField(db_comment='Время начала подписки', verbose_name='Время начала подписки')
+    subscription_end = models.DateTimeField(blank=True, null=True, db_comment='Время окончания подписки', verbose_name='Время окончания подписки')
+    tel_num_user = models.CharField(max_length=11, blank=True, null=True, db_comment='Телефонный номер с которого созданна услуга', verbose_name='Телефонный номер на кого подписка')
+    service_counter = models.IntegerField(db_comment='СЧЁТЧИК услуг\r\n0- мгновенно\r\n1-раз в день\r\n2-раз в неделю\r\n3-раз в месяц', verbose_name='Переодичность сработки отчёта',choices=Counter.choices)
+    stealth_type = models.IntegerField(db_comment='0 - автоматический\r\n1 - с проверкой', verbose_name='Автоматизм отправки', choices=Stelth.choices)
+    monitoring_sys = models.ForeignKey('MonitoringSystem', models.DO_NOTHING, db_column='monitoring_sys', db_comment='Система мониторинга', verbose_name='Система мониторинга')
+    sys_id_obj = models.CharField(max_length=100, db_comment='ID объекта в системе мониторинга', verbose_name='ИД в системе мониторинга')
+    sys_login = models.CharField(max_length=100, db_comment='Логин пользователя от системы мониторинга',verbose_name='Логин пользователя')
+    sys_password = models.CharField(max_length=100, db_comment='Пароль пользователя', verbose_name='Пароль пользователя')
+
+    class Meta:
+        managed = False
+        db_table = 'info_serv_obj'
+        db_table_comment = 'Объекты с информационными сервисами'
+        verbose_name = 'Отчёт'
+        verbose_name_plural = 'Отчёт'
+
+    def __str__(self):
+        return self.sys_id_obj
+
+class InformationServices(models.Model):
+    serv_id = models.AutoField(primary_key=True, db_comment='ID Сервиса')
+    serv_name = models.CharField(unique=True, max_length=100, db_comment='Название сервиса', verbose_name='Название сервиса')
+    serv_price = models.IntegerField(blank=True, null=True, db_comment='Цена за сервис', verbose_name='Цена за сервис')
+
+    class Meta:
+        managed = False
+        db_table = 'information_services'
+        db_table_comment = 'Таблица для информационных сервисов Клиентов'
+        verbose_name = 'Информационный сервис'
+        verbose_name_plural = 'Информационные сервисы'
+
+    def __str__(self):
+        return self.serv_name
