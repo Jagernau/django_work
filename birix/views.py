@@ -1,6 +1,8 @@
 from django.core.paginator import EmptyPage, PageNotAnInteger, Paginator
 from django.shortcuts import get_object_or_404, render
 from django.views.generic.detail import DetailView
+import requests
+import sys
 from birix.utils import get_accouns, get_history
 from datetime import datetime
 from django.contrib import admin
@@ -15,6 +17,7 @@ from django.contrib.auth.mixins import LoginRequiredMixin
 from django.db.models import Count
 from django.contrib import messages
 import yadisk
+import threading
 import os
 from birix.models import CaObjects
 from birix.forms import UploadFileForm
@@ -290,7 +293,6 @@ def get_stock(request):
 
 
     sorted_terminals = sorted(terminals_count.items(), key=lambda x: x[1], reverse=True)
-
     sorted_sensors = sorted(sensors_count.items(), key=lambda x: x[1], reverse=True)
 
     return render(
@@ -308,22 +310,38 @@ def get_stock(request):
 
 @login_required
 def upload_file_view(request, object_id):
+    
+    TOKEN = os.getenv('TOKEN_YANDEX')
+    y = yadisk.YaDisk(token=TOKEN)
+    ok_token = os.getenv('OK_TOKEN')
+    ok_url = os.getenv('OK_URL')
     ca_object = CaObjects.objects.get(id=object_id)
+    
     if request.method == 'POST':
         form = UploadFileForm(request.POST, request.FILES)
         if form.is_valid():
+            ca_object_contr_id = ca_object.contragent.ok_desk_id
+            ca_object_id = ca_object.ok_desk_id
             uploaded_file = request.FILES['file']
             selected_date = form.cleaned_data['date']
             formatted_date = selected_date.strftime('%d.%m.%Y')
-            file_name = f"{ca_object.object_name}_{formatted_date}"
-
+            file_name = f"{ca_object.object_name}_{formatted_date}.jpg"
+            ya_link = f"https://disk.yandex.ru/client/disk/Автотарировки/{ca_object.owner_contragent}?idApp=client&dialog=slider&idDialog=%2Fdisk%2FАвтотарировки%2F{ca_object.owner_contragent}%2F{file_name}"
+            ya_link = ya_link.replace(" ","%20")
             # Upload the file to Yandex Disk
-            upload_result = upload_to_yandex_disk(request, uploaded_file, ca_object.owner_contragent, file_name)
-            
+            upload_result = upload_to_yandex_disk(y, request, uploaded_file, ca_object.owner_contragent, file_name)
+            all_employ = get_all_employ(ok_url, ok_token)
+            employ = []
+            if all_employ:
+                employ = [empl["id"] for empl in all_employ if empl["last_name"] in request.user.last_name]
             if upload_result is True:
                 messages.success(request, "Файл успешно отправлен на диск")
             else:
                 messages.error(request, upload_result)  # Display the error message returned from the function
+            send_result = create_okdesk_ticket(request, ok_token, ok_url, ca_object, ca_object_contr_id, ca_object_id, ya_link, employ)
+            if send_result:
+                change_status_issues(request, ok_token, ok_url, send_result["id"])
+                messages.success(request, "Заявка успешно создана в OkDesk")
         else:
             messages.error(request, "Ошибка валидации формы. Пожалуйста, проверьте введенные данные.")
     else:
@@ -331,15 +349,11 @@ def upload_file_view(request, object_id):
 
     return render(request, 'upload.html', {'form': form})
 
-def upload_to_yandex_disk(request, uploaded_file, owner_contragent, file_name):
-    TOKEN = os.getenv('TOKEN_YANDEX')
-    y = yadisk.YaDisk(token=TOKEN)
+def upload_to_yandex_disk(y, request, uploaded_file, owner_contragent, file_name):
 
     if not y.check_token():
         return "Токен недействителен."
-
     folder_path = f"/Автотарировки/{owner_contragent}"
-
     try:
         if not y.is_dir(folder_path):
             y.mkdir(folder_path)  # Create folder if it doesn't exist
@@ -347,13 +361,66 @@ def upload_to_yandex_disk(request, uploaded_file, owner_contragent, file_name):
         else:
             messages.info(request, f'Папка "{folder_path}" уже существует.')
 
-        yandex_disk_path = f"{folder_path}/{file_name}.png"
+        yandex_disk_path = f"{folder_path}/{file_name}"
 
         # Upload the file to Yandex Disk
         with uploaded_file.open('rb') as f:
             y.upload(f, yandex_disk_path)
 
     except Exception as e:
-        return f"Ошибка при работе с Яндекс Диском: {e}"
-    
+        return f"Ошибка: {e}"
     return True
+
+def create_okdesk_ticket(request, ok_token, ok_url, object_name, owner, object_id, ya_link, employ):
+
+    url=f"{ok_url}v1/issues/?api_token={ok_token}"
+
+    data = {
+            "title": f"Новая тарировка - {object_name}",
+            "description": f"Новая тарировка объекта. Ссылка: {ya_link}",
+            "company_id": owner,
+            "assignee_id": str(employ[0]),
+            "maintenance_entity_id": object_id,
+            "type": "vvod_tarir",
+            "custom_parameters":{"ts_quantity":"1","labor_intensity":"2"}
+            }
+    try:
+        response = requests.post(url, json = data)
+        if response.status_code == 200:
+            return response.json()
+        else:
+            messages.error(request, f"Ошибка при создании заявки: {response.text}")
+    except Exception as e:
+            messages.error(request, f"Ошибка при работе с OkDesk API: {e} --- {data}")
+
+def change_status_issues(request, ok_token, ok_url, ok_issues_id):
+    url = f"{ok_url}/v1/issues/{ok_issues_id}/statuses?api_token={ok_token}"
+    data = {
+            "code":"tar_complete",
+            "comment":"Заявка создана автоматически с помощью робота",
+            }
+    
+    response = requests.post(url, json=data)
+    if response.status_code == 200:
+        return response.json()
+    else:
+        messages.error(request, f"Не сохранились данные {response.status_code} {response.text} {data}")
+
+
+def __get_request(url):
+        """Универсальный метод для выполнения GET-запросов"""
+        response = requests.get(url)
+        if response.status_code == 200:
+            return response.json()
+        else:
+            response = requests.get(url)
+            if response.status_code == 200:
+                return response.json()
+            else:
+                return None
+
+def get_all_employ(ok_url, ok_token):
+    return __get_request(f"{ok_url}v1/employees/list?api_token={ok_token}")
+
+
+

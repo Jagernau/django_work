@@ -142,6 +142,12 @@ class Contragents(models.Model):
             db_comment='Телефон ',
             verbose_name='Телефон',
             )
+    ok_desk_id = models.IntegerField(
+            blank=True,
+            null=True,
+            db_comment='id в ОК деске',
+            verbose_name='ID контрагента в Okdesk',
+            )
 
     service_manager = models.CharField(max_length=100, blank=True, null=True, db_comment='Имя прикреплённого менеджера тех поддержки')
 
@@ -474,6 +480,12 @@ class CaObjects(models.Model):
             blank=True, 
             null=True,
             verbose_name='Контрагент как в 1С',
+            )
+    ok_desk_id = models.IntegerField(
+            blank=True,
+            null=True,
+            db_comment='ID объекта в ОК-деске',
+            verbose_name='ID объекта в Okdesk',
             )
 
     class Meta:

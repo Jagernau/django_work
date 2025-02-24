@@ -14,6 +14,8 @@ ENV URL_ATS=${URL_ATS}
 ENV EMAIL_HOST_USER=${EMAIL_HOST_USER}
 ENV EMAIL_HOST_PASSWORD=${EMAIL_HOST_PASSWORD}
 ENV TOKEN_YANDEX=${TOKEN_YANDEX}
+ENV OK_TOKEN=${OK_TOKEN}
+ENV OK_URL=${OK_URL}
 
 RUN pip install --upgrade pip
 RUN pip install --no-cache-dir -r requirements.txt
