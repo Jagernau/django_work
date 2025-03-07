@@ -392,7 +392,7 @@ def create_okdesk_ticket(request, ok_token, ok_url, object_name, owner, object_i
     url=f"{ok_url}v1/issues/?api_token={ok_token}"
 
     data = {
-            "title": f"(TEST)Новая тарировка - {object_name}",
+            "title": f"Новая тарировка - {object_name}",
             "description": f"Новая тарировка объекта. Ссылка: {ya_link}",
             "company_id": owner,
             "assignee_id": str(employ[0]),
