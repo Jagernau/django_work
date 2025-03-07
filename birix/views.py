@@ -20,6 +20,7 @@ import yadisk
 import threading
 import os
 from birix.models import CaObjects
+from birix.models import Devices
 from birix.forms import UploadFileForm
 from django.shortcuts import render
 
@@ -308,6 +309,17 @@ def get_stock(request):
             )
 
 
+def print_view(request, device_id):
+    device = get_object_or_404(Devices, pk=device_id)
+    cont_name = str(device.contragent)
+    context = {
+            'device_owner': cont_name.split('(')[0],
+            'terminal_date': device.terminal_date,
+            'sys_mon': device.sys_mon,
+            'itprogrammer': device.itprogrammer.id,
+            }
+    return render(request, 'print_sticker.html', context)
+
 @login_required
 def upload_file_view(request, object_id):
     
@@ -325,28 +337,32 @@ def upload_file_view(request, object_id):
             uploaded_file = request.FILES['file']
             selected_date = form.cleaned_data['date']
             formatted_date = selected_date.strftime('%d.%m.%Y')
+            owner_name = str(ca_object.contragent)
+            owner_name = owner_name.replace('/', '!')
             file_name = f"{ca_object.object_name}_{formatted_date}.jpg"
-            ya_link = f"https://disk.yandex.ru/client/disk/Автотарировки/{ca_object.owner_contragent}?idApp=client&dialog=slider&idDialog=%2Fdisk%2FАвтотарировки%2F{ca_object.owner_contragent}%2F{file_name}"
+            file_name = file_name.replace('/', '!')
+            ya_link = f"https://disk.yandex.ru/client/disk/Автотарировки/{owner_name}?idApp=client&dialog=slider&idDialog=%2Fdisk%2FАвтотарировки%2F{owner_name}%2F{file_name}"
             ya_link = ya_link.replace(" ","%20")
             # Upload the file to Yandex Disk
-            upload_result = upload_to_yandex_disk(y, request, uploaded_file, ca_object.owner_contragent, file_name)
+            upload_result = upload_to_yandex_disk(y, request, uploaded_file, owner_name, file_name)
             all_employ = get_all_employ(ok_url, ok_token)
             employ = []
             if all_employ:
                 employ = [empl["id"] for empl in all_employ if empl["last_name"] in request.user.last_name]
             if upload_result is True:
                 messages.success(request, "Файл успешно отправлен на диск")
+                send_result = create_okdesk_ticket(request, ok_token, ok_url, ca_object, ca_object_contr_id, ca_object_id, ya_link, employ)
+                if send_result:
+                    change_status_issues(request, ok_token, ok_url, send_result["id"])
+                    messages.success(request, "Заявка успешно создана в OkDesk")
+                else:
+                    messages.error(request, "Ошибка при создании заявки")  # Display the error message
             else:
-                messages.error(request, upload_result)  # Display the error message returned from the function
-            send_result = create_okdesk_ticket(request, ok_token, ok_url, ca_object, ca_object_contr_id, ca_object_id, ya_link, employ)
-            if send_result:
-                change_status_issues(request, ok_token, ok_url, send_result["id"])
-                messages.success(request, "Заявка успешно создана в OkDesk")
+                messages.error(request, upload_result)  # Display the error message
         else:
             messages.error(request, "Ошибка валидации формы. Пожалуйста, проверьте введенные данные.")
     else:
         form = UploadFileForm(initial={'object_name': ca_object.object_name})
-
     return render(request, 'upload.html', {'form': form})
 
 def upload_to_yandex_disk(y, request, uploaded_file, owner_contragent, file_name):

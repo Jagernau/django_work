@@ -668,6 +668,7 @@ class DevicesAdmin(LoginRequiredMixin,admin.ModelAdmin):
             "device_owner",
 #            "client_name",
             "terminal_date",
+            "print_button",
             "devices_brand",
             "sys_mon",
             "contragent",
@@ -758,6 +759,9 @@ class DevicesAdmin(LoginRequiredMixin,admin.ModelAdmin):
         
         return super().add_view(request, form_url, extra_context={'form': form})
 
+    def print_button(self, obj):
+        return mark_safe(f'<a class="button" href="{reverse("print", args=[obj.device_id])}">🖨</a>')
+    print_button.short_description = ''
 
 
     def get_sim(self, obj):
