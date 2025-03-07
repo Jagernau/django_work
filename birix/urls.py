@@ -1,6 +1,7 @@
 from django.urls import path
 from . import views
 from birix.views import upload_file_view
+from birix.views import print_view
 
 
 urlpatterns = [
@@ -15,4 +16,5 @@ urlpatterns = [
     path("objects", views.objects, name="objects"),
     path("stock", views.get_stock, name="stock"),
     path('upload/<int:object_id>/', upload_file_view, name='upload_file'),
+    path('print_sticker/<int:device_id>/', print_view, name='print')
 ]
