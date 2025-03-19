@@ -4,7 +4,7 @@ from django.views.generic.detail import DetailView
 import requests
 import sys
 from birix.utils import get_accouns, get_history
-from datetime import datetime
+from datetime import datetime, timedelta, date
 from django.contrib import admin
 import birix.models as models
 from django.contrib.auth.decorators import login_required
@@ -322,43 +322,51 @@ def print_view(request, device_id):
 
 @login_required
 def upload_file_view(request, object_id):
-    
-    TOKEN = os.getenv('TOKEN_YANDEX')
-    y = yadisk.YaDisk(token=TOKEN)
-    ok_token = os.getenv('OK_TOKEN')
-    ok_url = os.getenv('OK_URL')
+    "Загрузка файла тарировки и создание заявок в Okdesk"
+    TOKEN = os.getenv('TOKEN_YANDEX') 
+    y = yadisk.YaDisk(token=TOKEN) 
+    ok_token = os.getenv('OK_TOKEN') 
+    ok_url = os.getenv('OK_URL')   
     ca_object = CaObjects.objects.get(id=object_id)
     
     if request.method == 'POST':
         form = UploadFileForm(request.POST, request.FILES)
         if form.is_valid():
-            ca_object_contr_id = ca_object.contragent.ok_desk_id
-            ca_object_id = ca_object.ok_desk_id
-            uploaded_file = request.FILES['file']
-            selected_date = form.cleaned_data['date']
-            formatted_date = selected_date.strftime('%d.%m.%Y')
-            owner_name = str(ca_object.contragent)
-            owner_name = owner_name.replace('/', '!')
-            file_name = f"{ca_object.object_name}_{formatted_date}.jpg"
-            file_name = file_name.replace('/', '!')
-            ya_link = f"https://disk.yandex.ru/client/disk/Автотарировки/{owner_name}?idApp=client&dialog=slider&idDialog=%2Fdisk%2FАвтотарировки%2F{owner_name}%2F{file_name}"
-            ya_link = ya_link.replace(" ","%20")
-            # Upload the file to Yandex Disk
+            #Подготовка переменных
+            ca_object_contr_id = ca_object.contragent.ok_desk_id #ID контрагента в okdesk
+            ca_object_id = ca_object.ok_desk_id #ID объекта в okdesk
+            uploaded_file = request.FILES['file'] #Загружаемый файл тарировки
+            selected_date = form.cleaned_data['date'] #Дата тарировки
+            formatted_date = selected_date.strftime('%d.%m.%Y') #Читабельный формат даты
+            owner_name = str(ca_object.contragent).replace('/', '!') #Имя контрагента
+            file_name = f"{ca_object.object_name}_{formatted_date}.jpg".replace('/', '!') #Имя файла
+            service_man = ca_object.contragent.service_manager #Менеджер закрепленный за контрагентом
+            ya_link = f"https://disk.yandex.ru/client/disk/Автотарировки/{owner_name}?idApp=client&dialog=slider&idDialog=%2Fdisk%2FАвтотарировки%2F{owner_name}%2F{file_name}".replace(" ", "%20") #Ссылка на файл в Я.диске
+            # Загрузка файла на Яндекс диск
             upload_result = upload_to_yandex_disk(y, request, uploaded_file, owner_name, file_name)
             all_employ = get_all_employ(ok_url, ok_token)
             employ = []
+            respon_employ = []
+            #Получение ID в okdesk ответственного за контрагента и ID вводившего тарировку менеджера
             if all_employ:
                 employ = [empl["id"] for empl in all_employ if empl["last_name"] in request.user.last_name]
+                if service_man:
+                    respon_employ = [empl["id"] for empl in all_employ if empl["last_name"] in service_man]
+                if service_man == None or service_man == 'NULL':
+                    respon_employ = [empl["id"] for empl in all_employ if empl["last_name"] in "Пономарев"]
             if upload_result is True:
                 messages.success(request, "Файл успешно отправлен на диск")
+                #Создание основной заявки по успешному вводу тарировки
                 send_result = create_okdesk_ticket(request, ok_token, ok_url, ca_object, ca_object_contr_id, ca_object_id, ya_link, employ)
                 if send_result:
+                    #Закрытие основной заявки и создание вложенной, на контроль заявки серв. мен.
                     change_status_issues(request, ok_token, ok_url, send_result["id"])
+                    create_child_okdesk_ticket(request, ok_token, ok_url, send_result["id"], ca_object_contr_id, respon_employ, ca_object_id)
                     messages.success(request, "Заявка успешно создана в OkDesk")
                 else:
-                    messages.error(request, "Ошибка при создании заявки")  # Display the error message
+                    messages.error(request, "Ошибка при создании заявки")
             else:
-                messages.error(request, upload_result)  # Display the error message
+                messages.error(request, upload_result)
         else:
             messages.error(request, "Ошибка валидации формы. Пожалуйста, проверьте введенные данные.")
     else:
@@ -366,6 +374,7 @@ def upload_file_view(request, object_id):
     return render(request, 'upload.html', {'form': form})
 
 def upload_to_yandex_disk(y, request, uploaded_file, owner_contragent, file_name):
+    "MKDIR в папку контрагента и отправка файла (y - Token, uploaded_file - загружаемый файл, owner_contragent - хозяин объекта как в 1С, file_name - имя объекта)"
 
     if not y.check_token():
         return "Токен недействителен."
@@ -388,6 +397,7 @@ def upload_to_yandex_disk(y, request, uploaded_file, owner_contragent, file_name
     return True
 
 def create_okdesk_ticket(request, ok_token, ok_url, object_name, owner, object_id, ya_link, employ):
+    "отправка post запроса на создание заявки (ok_token - Токен okdesk, ok_url - Ссылка на okdesk, object_name - имяобъекта, owner - ID контрагента в okdesk, object_id - ID объекта в okdesk, ya_link - Ссылка на файл тарировки в Яндекс, employ - ID вводившего тарировку)"
 
     url=f"{ok_url}v1/issues/?api_token={ok_token}"
 
@@ -410,10 +420,32 @@ def create_okdesk_ticket(request, ok_token, ok_url, object_name, owner, object_i
             messages.error(request, f"Ошибка при работе с OkDesk API: {e} --- {data}")
 
 def change_status_issues(request, ok_token, ok_url, ok_issues_id):
+    "Закрытие основной заявки в Okdesk (ok_token - Токен okdesk, ok_url - Ссылка на okdesk, ok_issues_id - id основной заявки на ввод тарировки)"
     url = f"{ok_url}/v1/issues/{ok_issues_id}/statuses?api_token={ok_token}"
     data = {
             "code":"tar_complete",
             "comment":"Заявка создана автоматически с помощью робота",
+            }
+    
+    response = requests.post(url, json=data)
+    if response.status_code == 200:
+        return response.json()
+    else:
+        messages.error(request, f"Не сохранились данные {response.status_code} {response.text} {data}")
+
+def create_child_okdesk_ticket(request, ok_token, ok_url, ok_issues_id, owner, employ, object_id):
+    "Создание вложенной заявки на контроль работы датчика в Okdesk (ok_token - Токен okdesk, ok_url - Ссылка на okdesk, ok_issues_id - ID основной заявки на ввод тарировки, owner - ID контрагента в okdesk, employ - ID специалиста ответственного за контрагента, object_id - ID объекта в okdesk)"
+    url=f"{ok_url}v1/issues/?api_token={ok_token}"
+    data = {
+            "title": f"Контроль работы доп. оборудования",
+            "description": f"Проконтролировать работу установленного ДУТа.",
+            "company_id": owner,
+            "deadline_at": str(date.today() + timedelta(days=14)) + " 17:30",
+            "assignee_id": str(employ[0]),
+            "maintenance_entity_id": object_id,
+            "type": "vn_control_dop_obor",
+            "custom_parameters":{"ts_quantity":"1","labor_intensity":"2"},
+            "parent_id": ok_issues_id,
             }
     
     response = requests.post(url, json=data)
@@ -437,6 +469,3 @@ def __get_request(url):
 
 def get_all_employ(ok_url, ok_token):
     return __get_request(f"{ok_url}v1/employees/list?api_token={ok_token}")
-
-
-
