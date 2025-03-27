@@ -10,7 +10,7 @@ from django.utils.html import format_html
 import pytz
 from django.urls import reverse, path
 from django.utils.safestring import mark_safe
-
+from birix.okdesk_funcs import create_okdesk_ticket 
 
 
 class ContragentsAdmin(LoginRequiredMixin, admin.ModelAdmin):
@@ -1202,7 +1202,6 @@ class SensorVendorAdmin(admin.ModelAdmin):
             "name",
     )
 
-
 class DeviceDiagnosicAdmin(admin.ModelAdmin):
     list_display = (
             "device",
@@ -1248,7 +1247,11 @@ class DeviceDiagnosicAdmin(admin.ModelAdmin):
 
 
     def get_klient(self, obj):
-        return obj.device.contragent.ca_name
+        client = obj.device.contragent
+        if client:
+            return client.ca_name
+        else:
+            return "NONE"
 
     get_klient.short_description = 'Клиент'
 
@@ -1257,8 +1260,88 @@ class DeviceDiagnosicAdmin(admin.ModelAdmin):
 
     get_imei.short_description = 'IMEI'
 
-#    readonly_fields = ('accept_date',)
+    def save_model(self, request, obj, form, change):
+        """Отправляем данные в Okdesk, если whom_tranfer стало 1 при создании или изменении."""
 
+        
+        device = Devices.objects.filter(device_id=obj.device_id).first()
+        if device.contragent == None:
+            messages.error(request, "Не возможно создать диагностику, тк у терминала не прописан КЛИЕНТ")
+            return
+
+        previous_obj = None
+        is_new = not obj.pk  # Проверяем, новый объект или нет
+
+        if not is_new:
+            previous_obj = DevicesDiagnostics.objects.get(pk=obj.pk)
+
+        super().save_model(request, obj, form, change)
+
+        # Отправляем данные в Okdesk:
+        # - если объект новый и whom_tranfer = 1
+        # - если объект существовал и whom_tranfer изменился с другого значения на 1
+        if (is_new and obj.whom_tranfer == 1) or (previous_obj and previous_obj.whom_tranfer != 1 and obj.whom_tranfer == 1):
+            device = Devices.objects.filter(device_id=obj.device_id).first()
+
+            if device:
+                imei = device.device_imei
+                sm_object_abon = CaObjects.objects.filter(imei=imei).filter(object_status=3).first()
+
+                if sm_object_abon:
+                    obj_ok_id = sm_object_abon.ok_desk_id
+                    if obj_ok_id:
+                        ok_client_id = sm_object_abon.contragent.ok_desk_id
+                        if ok_client_id:
+                            pb_title = "Приостановить объект(АТ в ремонт)"
+                            pb_desc = f"IMEI терминала: <b>{imei}</b>"
+                            result_create = create_okdesk_ticket(
+                                    object_name=sm_object_abon, 
+                                    owner=ok_client_id, 
+                                    object_id=obj_ok_id, 
+                                    employ=obj.programmer.last_name, 
+                                    problem_title=pb_title, 
+                                    problem_desc=pb_desc,
+                                    type_req="inner_proist_remont"
+                                    )
+                            if result_create[1] == False:
+                                messages.error(request, result_create[0])
+                            else:
+                                messages.success(request, result_create[0])
+
+                else:
+                    messages.success(request, f"Объект в СМ не найден, или не на абонентке")
+
+
+        if (is_new and obj.whom_tranfer == 0 and obj.brought == 1) or (previous_obj and previous_obj.whom_tranfer != 0 and obj.whom_tranfer == 0 and obj.brought == 1):
+            device = Devices.objects.filter(device_id=obj.device_id).first()
+
+            if device:
+                imei = device.device_imei
+                sm_object_abon = CaObjects.objects.filter(imei=imei).exclude(object_status=3).first()
+
+                if sm_object_abon:
+                    obj_ok_id = sm_object_abon.ok_desk_id
+                    if obj_ok_id:
+                        ok_client_id = sm_object_abon.contragent.ok_desk_id
+                        if ok_client_id:
+                            pb_title = "Активировать объект(АТ из ремонта)"
+                            pb_desc = f"IMEI терминала: <b>{imei}</b>"
+                            result_create = create_okdesk_ticket(
+                                    object_name=sm_object_abon, 
+                                    owner=ok_client_id, 
+                                    object_id=obj_ok_id, 
+                                    employ=obj.programmer.last_name, 
+                                    problem_title=pb_title, 
+                                    problem_desc=pb_desc,
+                                    type_req="inner_vosst_obj_posle_remonta"
+                                    )
+                            if result_create[1] == False:
+                                messages.error(request, result_create[0])
+                            else:
+                                messages.success(request, result_create[0])
+
+                else:
+                    messages.success(request, f"Объект в СМ не найден, или не снимался с абонентки")
 
 class OnecContractsAdmin(admin.ModelAdmin):
     list_display = (
