@@ -1517,6 +1517,10 @@ class InfoServObj(models.Model):
         AUTO = 0, 'Отправка без проверки'
         CHECK = 1, 'Проверить ИТ специалистом'
 
+    class Sends(models.IntegerChoices):
+        OKDESK = 0, 'В ОКДЕСК'
+        MAIL = 1, 'НА ПОЧТУ'
+
     serv_obj_id = models.AutoField(primary_key=True, db_comment='ID подписки')
     serv_obj_sys_mon = models.ForeignKey(CaObjects, models.DO_NOTHING, db_comment='Внутренний ID объекта\r\nБазы данных из СМ',verbose_name='Объект')
     info_obj_serv = models.ForeignKey('InformationServices', models.DO_NOTHING, db_comment='ID ведёт сервисам', verbose_name='Сервис')
@@ -1529,6 +1533,7 @@ class InfoServObj(models.Model):
     sys_id_obj = models.CharField(max_length=100, db_comment='ID объекта в системе мониторинга', verbose_name='ИД в системе мониторинга')
     sys_login = models.CharField(max_length=100, db_comment='Логин пользователя от системы мониторинга',verbose_name='Логин пользователя')
     sys_password = models.CharField(max_length=100, db_comment='Пароль пользователя', verbose_name='Пароль пользователя')
+    send_meth = models.IntegerField(db_comment='0 - ОКДЕСК\r\n1 - ПОЧТОЙ', verbose_name='СПОСОБ ОТПРАВКИ', choices=Sends.choices)
 
     class Meta:
         managed = False

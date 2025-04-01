@@ -1426,6 +1426,7 @@ class InfoServObjAdmin(admin.ModelAdmin):
             "sys_id_obj",
             "sys_login",
             "sys_password",
+            "send_meth",
 
             )
     add_fieldsets = (
@@ -1475,6 +1476,18 @@ class InfoServObjAdmin(admin.ModelAdmin):
     autocomplete_fields = (
         'serv_obj_sys_mon',
     )
+    exclude = [
+        'sys_id_obj',
+        'monitoring_sys',
+    ]
+
+    def save_model(self, request, obj, form, change):
+        # Получаем связанный объект CaObjects
+        ca_object = obj.serv_obj_sys_mon
+        # Устанавливаем значения из CaObject
+        obj.monitoring_sys = ca_object.sys_mon
+        obj.sys_id_obj = ca_object.sys_mon_object_id
+        super().save_model(request, obj, form, change)
 
 
 class InfoServTarifsAdmin(admin.ModelAdmin):
