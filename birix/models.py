@@ -1597,7 +1597,7 @@ class InformationServices(models.Model):
 
 class OnecContacts(models.Model):
     contact_id = models.AutoField(primary_key=True, db_comment='Идентификатор Контактов')
-    surname = models.CharField(max_length=50, blank=True, null=True, db_comment='Фамилия', verbose_name='Название сервиса')
+    surname = models.CharField(max_length=50, blank=True, null=True, db_comment='Фамилия', verbose_name='Фамилия')
     name = models.CharField(max_length=50, blank=True, null=True, db_comment='Имя', verbose_name='Имя')
     patronymic = models.CharField(max_length=50, blank=True, null=True, db_comment='Отчество', verbose_name='Отчество')
     position = models.CharField(max_length=100, blank=True, null=True, db_comment='Должность', verbose_name='Должность')
@@ -1612,5 +1612,5 @@ class OnecContacts(models.Model):
         managed = False
         db_table = 'onec_contacts'
         db_table_comment = 'Контакты'
-        verbose_name = 'Контакт 1C'
-        verbose_name_plural = 'Контакты 1C'
+        verbose_name = '9_Контакт 1C'
+        verbose_name_plural = '9_Контакты 1C'

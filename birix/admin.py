@@ -1542,6 +1542,59 @@ class InfoServTarifClientAdmin(admin.ModelAdmin):
     )
 
 
+
+class OnecContactsAdmin(admin.ModelAdmin):
+    list_display = (
+            "surname",
+            "name",
+            "position",
+            "phone",
+            "mobiletelephone",
+            "email",
+            "get_client",
+            )
+    list_filter = (
+            "surname",
+            "name",
+            "position",
+            )
+    search_fields = (
+            "surname",
+            "name",
+            "position",
+            "phone",
+            "mobiletelephone",
+            "email",
+    )
+    readonly_fields = [field.name for field in OnecContacts._meta.fields]
+    def has_add_permission(self, request):
+        return False  # Отключает возможность добавления новых записей
+
+    def get_client(self, obj):
+        client_uid = obj.unique_partner_identifier
+
+        if client_uid:
+            client = Contragents.objects.filter(unique_onec_id=client_uid).first()
+            if client:
+                return client.ca_name
+
+    get_client.short_description = "Контрагент"
+
+    def get_search_results(self, request, queryset, search_term):
+        # Стандартный поиск по заданным полям
+        queryset, use_distinct = super().get_search_results(request, queryset, search_term)
+        
+        # Дополнительный поиск по имени контрагента в Contragents
+        if search_term:
+            # Ищем контрагентов по ca_name
+            contragents = Contragents.objects.filter(ca_name__icontains=search_term)
+            # Получаем их unique_onec_id
+            onec_ids = contragents.values_list('unique_onec_id', flat=True)
+            # Добавляем записи OnecContacts, связанные с найденными контрагентами
+            queryset |= self.model.objects.filter(unique_partner_identifier__in=onec_ids)
+        
+        return queryset, use_distinct
+
 admin.site.register(Contragents, ContragentsAdmin)
 admin.site.register(LoginUsers, LoginUsersAdmin)
 admin.site.register(GlobalLogging, GlobalLogAdmin)
@@ -1562,6 +1615,7 @@ admin.site.register(GroupObjectRetrans, GroupObjectRetransAdmin)
 #admin.site.register(SensorVendor, SensorVendorAdmin)
 admin.site.register(DevicesDiagnostics, DeviceDiagnosicAdmin)
 admin.site.register(OnecContracts, OnecContractsAdmin)
+admin.site.register(OnecContacts, OnecContactsAdmin)
 admin.site.register(InfoServObj, InfoServObjAdmin)
 admin.site.register(InfoServTarifs, InfoServTarifsAdmin)
 admin.site.register(InfoServTarifClient, InfoServTarifClientAdmin)
