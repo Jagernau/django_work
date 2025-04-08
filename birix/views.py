@@ -477,7 +477,7 @@ def send_sms(request):
             phone_numbers = form.cleaned_data['phone_numbers']
             message = form.cleaned_data['message']
             for number in phone_numbers:
-                sleep(1)
+                sleep(2)
                 sender = MtsSender()
                 success, detail = sender.send_message(number, message)
                 results.append({

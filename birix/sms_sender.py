@@ -13,7 +13,7 @@ class MtsSender:
     
     def __check_message_deliver(self, message_id):
         'Отдаёт код ответа успешности доставки'
-        sleep(1)
+        sleep(2)
         url = 'https://omnichannel.mts.ru/http-api/v1/messages/info'
         body = {"int_ids": [message_id]}
         resp_info = requests.post(url , json=body, auth=HTTPBasicAuth(self.login, self.password))
@@ -31,6 +31,7 @@ class MtsSender:
 
     def __check_message_send(self, message_id):
         'Отдаёт код ответа успешности отправки'
+        sleep(3)
         url = 'https://omnichannel.mts.ru/http-api/v1/messages/info'
         body = {"int_ids": [message_id]}
         resp_info = requests.post(url , json=body, auth=HTTPBasicAuth(self.login, self.password))
@@ -70,9 +71,9 @@ class MtsSender:
         if resp.status_code == 200:
             result = resp.json()
             mess_id = result['messages'][0]['internal_id']
-            sleep(1)
+            sleep(2)
             res_send = self.__check_message_send(mess_id)
-            sleep(1)
+            sleep(2)
             res_deliver = self.__check_message_deliver(mess_id)
             return (res_send[0], f'{str(res_send[1])} + {str(res_deliver)}')
 
