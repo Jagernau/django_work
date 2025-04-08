@@ -16,5 +16,6 @@ urlpatterns = [
     path("objects", views.objects, name="objects"),
     path("stock", views.get_stock, name="stock"),
     path('upload/<int:object_id>/', upload_file_view, name='upload_file'),
-    path('print_sticker/<int:device_id>/', print_view, name='print')
+    path('print_sticker/<int:device_id>/', print_view, name='print'),
+    path('send-sms/', views.send_sms, name='send_sms'),
 ]

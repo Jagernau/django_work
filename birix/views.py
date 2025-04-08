@@ -1,11 +1,10 @@
+from time import sleep
 from django.core.paginator import EmptyPage, PageNotAnInteger, Paginator
 from django.shortcuts import get_object_or_404, render
 from django.views.generic.detail import DetailView
 import requests
-import sys
 from birix.utils import get_accouns, get_history
 from datetime import datetime, timedelta, date
-from django.contrib import admin
 import birix.models as models
 from django.contrib.auth.decorators import login_required
 from django.views.generic.edit import UpdateView
@@ -14,16 +13,13 @@ from django.http import HttpResponse
 import pandas as pd
 from django.contrib.auth.decorators import user_passes_test
 from django.contrib.auth.mixins import LoginRequiredMixin
-from django.db.models import Count
 from django.contrib import messages
 import yadisk
-import threading
 import os
-from birix.models import CaObjects
-from birix.models import Devices
-from birix.forms import UploadFileForm
+from birix.models import CaObjects, Devices, GlobalLogging
+from birix.forms import UploadFileForm, SmsForm
 from django.shortcuts import render
-
+from birix.sms_sender import MtsSender
 
 @login_required
 @user_passes_test(lambda u: u.is_superuser)
@@ -308,7 +304,6 @@ def get_stock(request):
             }
             )
 
-
 def print_view(request, device_id):
     device = get_object_or_404(Devices, pk=device_id)
     cont_name = str(device.contragent)
@@ -469,3 +464,43 @@ def __get_request(url):
 
 def get_all_employ(ok_url, ok_token):
     return __get_request(f"{ok_url}v1/employees/list?api_token={ok_token}")
+
+
+
+from django.utils import timezone
+
+def send_sms(request):
+    results = []
+    if request.method == 'POST':
+        form = SmsForm(request.POST)
+        if form.is_valid():
+            phone_numbers = form.cleaned_data['phone_numbers']
+            message = form.cleaned_data['message']
+            for number in phone_numbers:
+                sleep(1)
+                sender = MtsSender()
+                success, detail = sender.send_message(number, message)
+                results.append({
+                    'number': number,
+                    'success': success,
+                    'detail': detail
+                })
+                
+                # Логирование действия
+                GlobalLogging.objects.create(
+                    section_type='SMS',
+                    edit_id=request.user.id if request.user.is_authenticated else 0,
+                    field='phone_number',
+                    old_value=number,
+                    new_value=message[:255],  # Обрезаем сообщение до 255 символов
+                    change_time=timezone.now(),
+                    sys_id=GlobalLogging.SysChoices.null,
+                    action=GlobalLogging.ActionChoices.create
+                )
+    else:
+        form = SmsForm()
+    
+    return render(request, 'send_sms.html', {
+        'form': form,
+        'results': results
+    })
