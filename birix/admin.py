@@ -1595,6 +1595,19 @@ class OnecContactsAdmin(admin.ModelAdmin):
         
         return queryset, use_distinct
 
+
+class CellOperatorAdmin(admin.ModelAdmin):
+    list_display = (
+            "name",
+            "ca_price",
+            "sun_price",
+            )
+    list_filter = (
+            "name",
+            "ca_price",
+            "sun_price",
+            )
+
 admin.site.register(Contragents, ContragentsAdmin)
 admin.site.register(LoginUsers, LoginUsersAdmin)
 admin.site.register(GlobalLogging, GlobalLogAdmin)
@@ -1619,3 +1632,5 @@ admin.site.register(OnecContacts, OnecContactsAdmin)
 admin.site.register(InfoServObj, InfoServObjAdmin)
 admin.site.register(InfoServTarifs, InfoServTarifsAdmin)
 admin.site.register(InfoServTarifClient, InfoServTarifClientAdmin)
+admin.site.register(CellOperator, CellOperatorAdmin)
+
