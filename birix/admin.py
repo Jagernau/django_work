@@ -11,7 +11,7 @@ import pytz
 from django.urls import reverse, path
 from django.utils.safestring import mark_safe
 from birix.okdesk_funcs import create_okdesk_ticket 
-
+from rangefilter.filters import DateRangeFilter
 
 class ContragentsAdmin(LoginRequiredMixin, admin.ModelAdmin):
 
@@ -99,6 +99,7 @@ class LoginUsersAdmin(LoginRequiredMixin,admin.ModelAdmin):
             )
 
     list_filter = (
+            ('date_create', DateRangeFilter),
             "system",
             "date_create",
             "contragent__service_manager",
@@ -366,6 +367,7 @@ class GlobalLogAdmin(LoginRequiredMixin,admin.ModelAdmin):
             )
 
     list_filter = (
+            ('change_time', DateRangeFilter),
             "section_type",
             "sys_id",
             "field",
@@ -533,6 +535,8 @@ class SimCardsAdmin(LoginRequiredMixin,admin.ModelAdmin):
             )
 
     list_filter = (
+            ('sim_date', DateRangeFilter),
+            ('block_start', DateRangeFilter),
             "sim_cell_operator",
             "sim_owner",
             "sim_date",
@@ -677,6 +681,7 @@ class DevicesAdmin(LoginRequiredMixin,admin.ModelAdmin):
             )
 
     list_filter = (
+            ('terminal_date', DateRangeFilter),
             "devices_brand",
             "terminal_date",
             'itprogrammer',
@@ -960,6 +965,9 @@ class LogAdmin(admin.ModelAdmin):
             "content_type",
             "user",
             )
+    list_filter = (
+            ('action_time', DateRangeFilter),
+            )
 
     def get_change_message(self, obj):
         if obj.action_flag == 1:
@@ -1230,6 +1238,8 @@ class DeviceDiagnosicAdmin(admin.ModelAdmin):
             })
     )
     list_filter = (
+            ('accept_date', DateRangeFilter),
+            ('transfer_date', DateRangeFilter),
             'programmer',
             'brought',
             'whom_tranfer',
@@ -1389,6 +1399,7 @@ class OnecContractsAdmin(admin.ModelAdmin):
             })
     )
     list_filter = (
+            ('contract_date', DateRangeFilter),
 
             "contract_date",
             "contract_status",
@@ -1448,6 +1459,7 @@ class InfoServObjAdmin(admin.ModelAdmin):
             })
     )
     list_filter = (
+                    ('subscription_start', DateRangeFilter),
                     "info_obj_serv",
                     "subscription_start",
                     "subscription_end",
@@ -1608,6 +1620,118 @@ class CellOperatorAdmin(admin.ModelAdmin):
             "sun_price",
             )
 
+
+class BillingAdmin(admin.ModelAdmin):
+    actions = ['download_excel',]
+    list_display = (
+            "record_time",
+            "obj_name",
+            "obj_status",
+            "obj_status_name",
+            "obj_group_name",
+            "sys_mon_name",
+            "obj_imei",
+            "client_name",
+            "client_inn",
+            "client_kpp",
+            "client_login",
+            "sim_operat_name",
+            "retrans_name",
+            "sys_mon_price",
+            "sim_price",
+            "retrans_price",
+            "total_sum",
+            )
+    list_filter = (
+            ('record_time', DateRangeFilter),
+            "obj_status",
+            "obj_status_name",
+            "sys_mon_name",
+            "sim_operat_name",
+            "retrans_name",
+            )
+    search_fields = (
+            "obj_name",
+            "obj_status_name",
+            "obj_group_name",
+            "obj_imei",
+            "client_name",
+            "client_kpp",
+            "client_login",
+            "retrans_name",
+    )
+    readonly_fields = [
+            "obj_group_name",
+            "obj_status_name",
+            "obj_imei",
+            "client_name",
+            "client_inn",
+            "client_kpp",
+            "client_login",
+            "retrans_name",
+            ]
+    def has_add_permission(self, request):
+        return False  # Отключает возможность добавления новых записей
+
+
+    def download_excel(self, request, queryset):
+            workbook = openpyxl.Workbook()
+            worksheet = workbook.active
+            worksheet.title = "Billing_data"
+
+            # Write headers
+            header_row = [
+                "record_time",
+                "obj_name",
+                "obj_status",
+                "obj_status_name",
+                "obj_group_name",
+                "sys_mon_name",
+                "obj_imei",
+                "client_name",
+                "client_inn",
+                "client_kpp",
+                "client_login",
+                "sim_operat_name",
+                "retrans_name",
+                "sys_mon_price",
+                "sim_price",
+                "retrans_price",
+                "total_sum",
+                    ]
+            for col_num, header in enumerate(header_row, 1):
+                worksheet.cell(row=1, column=col_num).value = header
+
+            # Write data rows
+            row_num = 2
+            for bill in queryset:
+                worksheet.cell(row=row_num, column=1).value = str(bill.record_time)
+                worksheet.cell(row=row_num, column=2).value = str(bill.obj_name)
+                worksheet.cell(row=row_num, column=3).value = str(bill.obj_status)
+                worksheet.cell(row=row_num, column=4).value = str(bill.obj_status_name)
+                worksheet.cell(row=row_num, column=5).value = str(bill.obj_group_name)
+                worksheet.cell(row=row_num, column=6).value = str(bill.sys_mon_name)
+                worksheet.cell(row=row_num, column=7).value = str(bill.obj_imei)
+                worksheet.cell(row=row_num, column=8).value = str(bill.client_name)
+                worksheet.cell(row=row_num, column=9).value = str(bill.client_inn)
+                worksheet.cell(row=row_num, column=10).value = str(bill.client_kpp)
+                worksheet.cell(row=row_num, column=11).value = str(bill.client_login)
+                worksheet.cell(row=row_num, column=12).value = str(bill.sim_operat_name)
+                worksheet.cell(row=row_num, column=13).value = str(bill.retrans_name)
+                worksheet.cell(row=row_num, column=14).value = str(bill.sys_mon_price)
+                worksheet.cell(row=row_num, column=15).value = str(bill.sim_price)
+                worksheet.cell(row=row_num, column=16).value = str(bill.retrans_price)
+                worksheet.cell(row=row_num, column=17).value = str(bill.total_sum)
+                row_num += 1
+
+            # Set content type and attachment filename
+            response = HttpResponse(content_type='application/vnd.ms-excel')
+            response['Content-Disposition'] = 'attachment; filename=terminal.xlsx'
+
+            # Write workbook to response
+            workbook.save(response)
+            return response
+
 admin.site.register(Contragents, ContragentsAdmin)
 admin.site.register(LoginUsers, LoginUsersAdmin)
 admin.site.register(GlobalLogging, GlobalLogAdmin)
@@ -1633,4 +1757,5 @@ admin.site.register(InfoServObj, InfoServObjAdmin)
 admin.site.register(InfoServTarifs, InfoServTarifsAdmin)
 admin.site.register(InfoServTarifClient, InfoServTarifClientAdmin)
 admin.site.register(CellOperator, CellOperatorAdmin)
+admin.site.register(Billing, BillingAdmin)
 

@@ -326,6 +326,187 @@ class AuthUserUserPermissions(models.Model):
         unique_together = (('user', 'permission'),)
 
 
+class Billing(models.Model):
+    bil_id = models.AutoField(primary_key=True, db_comment='ID билинга')
+    sys_mon = models.ForeignKey(
+            'MonitoringSystem', 
+            models.DO_NOTHING, 
+            db_comment='ID системы мониторинга',
+            verbose_name='ID системы мониторинга',
+            )
+    sys_mon_price = models.IntegerField(
+            db_comment='Стоимость СМ для КЛ',
+            verbose_name='Стоимость СМ для КЛ',
+            )
+    retrans = models.ForeignKey(
+            'ObjectRetranslators', 
+            models.DO_NOTHING, blank=True, 
+            null=True, 
+            db_comment='ID ретрансляции',
+            verbose_name='ID ретрансляции',
+            )
+    retrans_name = models.CharField(
+            max_length=50,
+            blank=True, 
+            null=True, 
+            db_comment='Название ретрансляции',
+            verbose_name='Название ретрансляции',
+            )
+    retrans_price = models.IntegerField(
+            blank=True, 
+            null=True, 
+            db_comment='Цена ретрансляции',
+            verbose_name='Цена ретрансляции',
+            )
+    obj = models.ForeignKey(
+            'CaObjects',
+            models.DO_NOTHING,
+            db_comment='ID объекта в БД',
+            verbose_name='ID объекта в БД',
+            )
+    obj_name = models.CharField(
+            max_length=100, 
+            db_comment='Название объекта',
+            verbose_name='Название объекта',
+            )
+    sim = models.ForeignKey(
+            'SimCards', 
+            models.DO_NOTHING,
+            blank=True, 
+            null=True,
+            db_comment='ID СИМКАРТЫ',
+            verbose_name='ID СИМКАРТЫ',
+            )
+    sim_operat_name = models.CharField(
+            max_length=50, 
+            blank=True, 
+            null=True,
+            db_comment='Имя оператора',
+            verbose_name='Имя оператора',
+            )
+    sim_price = models.IntegerField(
+            blank=True,
+            null=True,
+            db_comment='Цена сим для КЛ',
+            verbose_name='Цена сим для КЛ',
+            )
+    client = models.ForeignKey(
+            Contragents, 
+            models.DO_NOTHING, 
+            blank=True, 
+            null=True, 
+            db_comment='ID клиента',
+            verbose_name='ID клиента',
+            )
+    client_name = models.CharField(
+            max_length=300,
+            blank=True,
+            null=True, 
+            db_comment='Имя клиента',
+            verbose_name='Имя клиента',
+            )
+    client_inn = models.CharField(
+            max_length=200, 
+            blank=True,
+            null=True, 
+            db_comment='ИНН Клиента',
+            verbose_name='ИНН Клиента',
+            )
+    discount_client = models.JSONField(
+            blank=True, 
+            null=True, 
+            db_comment="СКИДКИ КЛИЕНТА\r\n[{'dis_id': 1, 'dis_name': 'Лояльность'},\r\n {'dis_id': 2, 'dis_name': 'Кол-во объектов > 50'},\r\n]",
+            verbose_name='СКИДКИ КЛИЕНТА',
+            )
+    discount_client_rate = models.IntegerField(
+            blank=True, 
+            null=True, 
+            db_comment='Итоговый процент Скидки',
+            verbose_name='Итоговый процент СКИДКИ КЛИЕНТА',
+            )
+    obj_status = models.ForeignKey(
+            'ObjectStatuses', 
+            models.DO_NOTHING, 
+            db_comment='ID статуса объекта',
+            verbose_name='ID статуса объекта',
+            )
+    discount_obj = models.JSONField(
+            blank=True,
+            null=True, 
+            db_comment="СКИДКИ ОБЪЕКТА [{'dis_id': 1, 'dis_name': 'Лояльность'}, {'dis_id': 2, 'dis_name': 'Дружественный'}, ]",
+            verbose_name='СКИДКИ ОБЪЕКТА',
+            )
+    discount_obj_rate = models.IntegerField(
+            blank=True, 
+            null=True, 
+            db_comment='Процент скидок на объект',
+            verbose_name='Процент скидок на объект',
+            )
+    record_time = models.DateTimeField(
+            db_comment='Время создания записи',
+            verbose_name='Время записи',
+            )
+    obj_status_name = models.CharField(
+            max_length=50, 
+            db_comment='Имя статуса объекта',
+            verbose_name='Имя статуса объекта',
+            )
+    obj_group_name = models.CharField(
+            max_length=400, 
+            blank=True, 
+            null=True, 
+            db_comment='Название группы объектов как в СМ',
+            verbose_name='Группа объектов в СМ',
+            )
+    obj_group_id = models.CharField(
+            max_length=400, 
+            db_comment='ИД группы объектов',
+            verbose_name='ИД группы объектов',
+            )
+    obj_id_in_sys = models.CharField(
+            max_length=300,
+            db_comment='ID объекта в системе мониторинга',
+            verbose_name='ID объекта в системе',
+            )
+    sys_mon_name = models.CharField(
+            max_length=100, 
+            db_comment='Название системы мониторинга',
+            verbose_name='Система мониторинга',
+            )
+    client_login = models.CharField(
+            max_length=400, 
+            db_comment='Логин клиента',
+            verbose_name='Логин клиента',
+            )
+    client_kpp = models.CharField(
+            max_length=200, 
+            blank=True, 
+            null=True, 
+            db_comment='Клиентский КПП',
+            verbose_name='Клиентский КПП',
+            )
+    total_sum = models.IntegerField(
+            blank=True, 
+            null=True, 
+            db_comment='Итоговая сумма',
+            verbose_name='Итоговая сумма',
+            )
+    obj_imei = models.CharField(
+            max_length=200, 
+            blank=True, 
+            null=True, 
+            db_comment='ИМЕЙ объекта',
+            verbose_name='IMEI объекта',
+            )
+
+    class Meta:
+        managed = False
+        db_table = 'billing'
+        db_table_comment = 'Таблица снимок параметров билинга за день'
+        verbose_name = '10_Биллинг'
+        verbose_name_plural = '10_Биллинги'
+
+
 class CaContacts(models.Model):
     class PositionChoices(models.TextChoices):
         DIRECTOR = 'Директор', 'Директор'
