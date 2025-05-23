@@ -13,6 +13,10 @@ from django.utils.safestring import mark_safe
 from birix.okdesk_funcs import create_okdesk_ticket 
 from rangefilter.filters import DateRangeFilter
 
+from django.core.exceptions import ValidationError
+from django.db.models import Q
+from django.utils.translation import gettext_lazy as _
+
 class ContragentsAdmin(LoginRequiredMixin, admin.ModelAdmin):
 
     actions = ['download_excel',]
@@ -1424,82 +1428,280 @@ class OnecContractsAdmin(admin.ModelAdmin):
     )
 
 
-class InfoServObjAdmin(admin.ModelAdmin):
-    list_display = (
-            "serv_obj_sys_mon",
-            "info_obj_serv",
-            "subscription_start",
-            "subscription_end",
-            "tel_num_user",
-            "service_counter",
-            "stealth_type",
-            "monitoring_sys",
-            "sys_id_obj",
-            "sys_login",
-            "sys_password",
-            "send_meth",
+class ClientFilter(admin.SimpleListFilter):
+    title = 'Клиент'
+    parameter_name = 'client'
 
+    def lookups(self, request, model_admin):
+        # Получаем текущий queryset с учетом всех фильтров
+        queryset = model_admin.get_queryset(request)
+        
+        # Получаем уникальные логины из текущей выборки
+        logins = queryset.values_list('sys_login', flat=True).distinct()
+        
+        # Получаем связанных контрагентов
+        clients = Contragents.objects.filter(
+            loginusers__login__in=logins
+        ).distinct().values_list('ca_id', 'ca_name')
+        
+        return [(client[0], client[1]) for client in clients]
+
+    def queryset(self, request, queryset):
+        if self.value():
+            # Фильтруем по выбранному клиенту
+            return queryset.filter(
+                sys_login__in=LoginUsers.objects.filter(
+                    contragent__ca_id=self.value()
+                ).values_list('login', flat=True)
             )
-    add_fieldsets = (
-            (None, {
-                'classes': ('wide',),
-                'fields': (
-                    "serv_obj_sys_mon",
-                    "info_obj_serv",
-                    "subscription_start",
-                    "subscription_end",
-                    "tel_num_user",
-                    "service_counter",
-                    "stealth_type",
-                    "monitoring_sys",
-                    "sys_id_obj",
-                    "sys_login",
-                    "sys_password",
-                )
-            })
+        return queryset
+
+class SpecialistFilter(admin.SimpleListFilter):
+    title = 'Специалист'
+    parameter_name = 'specialist'
+
+    def lookups(self, request, model_admin):
+        # Получаем текущий queryset
+        queryset = model_admin.get_queryset(request)
+        
+        # Получаем логины из текущей выборки
+        logins = queryset.values_list('sys_login', flat=True).distinct()
+        
+        # Получаем уникальных специалистов
+        specialists = Contragents.objects.filter(
+            loginusers__login__in=logins
+        ).exclude(service_manager__exact='').values_list(
+            'service_manager', flat=True
+        ).distinct().order_by('service_manager')
+        
+        return [(s, s) for s in specialists if s]
+
+    def queryset(self, request, queryset):
+        value = self.value()
+        if value:
+            return queryset.filter(
+                sys_login__in=LoginUsers.objects.filter(
+                    contragent__service_manager=value
+                ).values_list('login', flat=True)
+            )
+        return queryset
+
+class InfoServObjAdmin(admin.ModelAdmin):
+
+    actions = ['download_excel']
+    list_display = (
+        "client_name_display",  # Добавляем имя клиента
+        "serv_obj_sys_mon",
+        "info_obj_serv",
+        "subscription_start_date",
+        "subscription_end_date",
+        "service_counter",
+        "stealth_type",
+        "monitoring_sys",
+        "sys_login",
+        "sys_password",
+        "send_meth",
+        "specialist_display",
     )
-    list_filter = (
-                    ('subscription_start', DateRangeFilter),
-                    "info_obj_serv",
-                    "subscription_start",
-                    "subscription_end",
-                    "tel_num_user",
-                    "service_counter",
-                    "stealth_type",
-                    "monitoring_sys",
-                    "sys_id_obj",
-                    "sys_login",
-                    "sys_password",
-            )
+    
     search_fields = (
-                    "serv_obj_sys_mon",
-                    "info_obj_serv",
-                    "subscription_start",
-                    "subscription_end",
-                    "tel_num_user",
-                    "service_counter",
-                    "stealth_type",
-                    "monitoring_sys",
-                    "sys_id_obj",
-                    "sys_login",
-                    "sys_password",
+        "sys_login",  # Поиск по имени клиента
+        "serv_obj_sys_mon__object_name",
+        "sys_id_obj",
+        "sys_login",
+        "sys_password",
     )
+
+    def subscription_start_date(self, obj):
+        return obj.subscription_start.strftime("%d.%m.%Y") if obj.subscription_start else ""
+    subscription_start_date.short_description = "Начало подписки"
+    subscription_start_date.admin_order_field = 'subscription_start'
+
+    def subscription_end_date(self, obj):
+        return obj.subscription_end.strftime("%d.%m.%Y") if obj.subscription_end else ""
+    subscription_end_date.short_description = "Окончание подписки"
+    subscription_end_date.admin_order_field = 'subscription_end'
+
+    def specialist_display(self, obj):
+        try:
+            login_user = LoginUsers.objects.get(login=obj.sys_login)
+            return login_user.contragent.service_manager or "Не указан"
+        except (LoginUsers.DoesNotExist, AttributeError):
+            return "Не указан"
+    specialist_display.short_description = "Специалист"
+
+    
+    def client_name_display(self, obj):
+        """Отображаем имя клиента через sys_login → LoginUsers → Contragents"""
+        try:
+            login_user = LoginUsers.objects.get(login=obj.sys_login)
+            return login_user.contragent.ca_name
+        except LoginUsers.DoesNotExist:
+            return "Клиент не найден"
+    client_name_display.short_description = "Клиент"
+    
+    def get_queryset(self, request):
+        """Оптимизация запросов с prefetch_related"""
+        return super().get_queryset(request).select_related(
+            'serv_obj_sys_mon',
+            'info_obj_serv',
+            'monitoring_sys'
+        )
+
+    # Остальные части кода остаются без изменений
+    add_fieldsets = (
+        (None, {
+            'classes': ('wide',),
+            'fields': (
+                "serv_obj_sys_mon",
+                "info_obj_serv",
+                "subscription_start",
+                "subscription_end",
+                "service_counter",
+                "stealth_type",
+                "monitoring_sys",
+                "sys_login",
+                "sys_password",
+            )
+        })
+    )
+    
+    list_filter = (
+        SpecialistFilter,
+        ClientFilter,
+        ('subscription_start', DateRangeFilter),
+        "info_obj_serv",
+        "subscription_start",
+        "subscription_end",
+        "service_counter",
+        "stealth_type",
+        "monitoring_sys",
+        "sys_id_obj",
+        "sys_login",
+    )
+    
     date_hierarchy = 'subscription_start'
-    autocomplete_fields = (
-        'serv_obj_sys_mon',
-    )
-    exclude = [
-        'sys_id_obj',
-        'monitoring_sys',
-    ]
+    autocomplete_fields = ('serv_obj_sys_mon',)
+    exclude = ['sys_id_obj', 'monitoring_sys', "tel_num_user"]
 
     def save_model(self, request, obj, form, change):
-        # Получаем связанный объект CaObjects
         ca_object = obj.serv_obj_sys_mon
-        # Устанавливаем значения из CaObject
         obj.monitoring_sys = ca_object.sys_mon
         obj.sys_id_obj = ca_object.sys_mon_object_id
         super().save_model(request, obj, form, change)
+
+    def download_excel(self, request, queryset):
+        import openpyxl
+        from django.http import HttpResponse
+        from django.utils import timezone
+        from openpyxl.utils import get_column_letter
+
+        # Оптимизация запросов
+        queryset = queryset.select_related(
+            'serv_obj_sys_mon',
+            'info_obj_serv',
+            'monitoring_sys'
+        )
+
+        # Собираем все необходимые логины
+        logins = list(queryset.values_list('sys_login', flat=True).distinct())
+        
+        # Получаем данные клиентов и специалистов
+        login_users = LoginUsers.objects.filter(
+            login__in=logins
+        ).select_related('contragent')
+        
+        login_info = {
+            lu.login: {
+                'client': lu.contragent.ca_name if lu.contragent else "Не определено",
+                'specialist': lu.contragent.service_manager if lu.contragent else "Не указан"
+            }
+            for lu in login_users
+        }
+
+        # Создаем книгу Excel
+        workbook = openpyxl.Workbook()
+        worksheet = workbook.active
+        worksheet.title = "Информационные сервисы"
+
+        # Заголовки
+        headers = [
+            "Клиент",
+            "Объект мониторинга",
+            "Сервис",
+            "Начало подписки",
+            "Конец подписки",
+            "Периодичность",
+            "Автоматизм",
+            "Система",
+            "Логин",
+            "Пароль",
+            "Способ отправки",
+            "Специалист"
+        ]
+
+        # Записываем заголовки
+        for col_num, header in enumerate(headers, 1):
+            worksheet.cell(row=1, column=col_num, value=header)
+
+        # Заполняем данные
+        for row_num, obj in enumerate(queryset, start=2):
+            client_data = login_info.get(obj.sys_login, {
+                'client': "Не определено",
+                'specialist': "Не указан"
+            })
+
+            # Форматируем даты
+            start_date = obj.subscription_start.strftime("%d.%m.%Y") if obj.subscription_start else ""
+            end_date = obj.subscription_end.strftime("%d.%m.%Y") if obj.subscription_end else ""
+
+            row = [
+                client_data['client'],
+                str(obj.serv_obj_sys_mon),
+                str(obj.info_obj_serv),
+                start_date,
+                end_date,
+                obj.get_service_counter_display(),
+                obj.get_stealth_type_display(),
+                str(obj.monitoring_sys),
+                obj.sys_login,
+                obj.sys_password,
+                obj.get_send_meth_display(),
+                client_data['specialist']
+            ]
+
+            for col_num, value in enumerate(row, 1):
+                worksheet.cell(row=row_num, column=col_num, value=value)
+
+        # Настраиваем ширину столбцов
+        column_widths = [30, 25, 30, 15, 15, 25, 25, 25, 20, 20, 20, 25]
+        for i, width in enumerate(column_widths, 1):
+            worksheet.column_dimensions[get_column_letter(i)].width = width
+
+        # Формируем ответ
+        response = HttpResponse(
+            content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+        )
+        filename = f"export_{timezone.now().strftime('%Y%m%d_%H%M')}.xlsx"
+        response['Content-Disposition'] = f'attachment; filename="{filename}"'
+        
+        workbook.save(response)
+        return response
+
+    def get_queryset(self, request):
+        """Оптимизация запросов"""
+        return super().get_queryset(request).select_related(
+            'serv_obj_sys_mon',
+            'info_obj_serv',
+            'monitoring_sys'
+        ).prefetch_related(
+            models.Prefetch(
+                'serv_obj_sys_mon',
+                queryset=CaObjects.objects.select_related('sys_mon')
+            )
+        )
+
+    download_excel.short_description = "Экспорт в Excel"
 
 
 class InfoServTarifsAdmin(admin.ModelAdmin):
