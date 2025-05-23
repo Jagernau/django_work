@@ -1486,8 +1486,8 @@ class SpecialistFilter(admin.SimpleListFilter):
             )
         return queryset
 
-class InfoServObjAdmin(admin.ModelAdmin):
 
+class InfoServObjAdmin(admin.ModelAdmin):
     actions = ['download_excel']
     list_display = (
         "client_name_display",  # Добавляем имя клиента
@@ -1584,11 +1584,57 @@ class InfoServObjAdmin(admin.ModelAdmin):
     autocomplete_fields = ('serv_obj_sys_mon',)
     exclude = ['sys_id_obj', 'monitoring_sys', "tel_num_user"]
 
+
+
     def save_model(self, request, obj, form, change):
+        # Получаем связанный объект и тариф
         ca_object = obj.serv_obj_sys_mon
+        
+        try:
+            tarif = InfoServTarifs.objects.get(tarif_id=obj.stealth_type)
+        except InfoServTarifs.DoesNotExist:
+            messages.error(request,"Выбранный тарифный план не существует!")
+            return
+
+        # Проверка пересечения временных интервалов
+        base_q = Q(serv_obj_sys_mon=ca_object) & ~Q(pk=obj.pk)
+        
+        # Для объектов с указанной датой окончания
+        if obj.subscription_end:
+            overlap_q = Q(
+                Q(subscription_start__lt=obj.subscription_end,
+                subscription_end__gt=obj.subscription_start) |
+                Q(subscription_end__isnull=True,
+                subscription_start__lt=obj.subscription_end)
+            )
+        # Для бессрочных подписок
+        else:
+            overlap_q = Q(
+                Q(subscription_end__gt=obj.subscription_start) |
+                Q(subscription_end__isnull=True)
+            )
+
+        # Получаем пересекающиеся сервисы
+        active_services = InfoServObj.objects.filter(base_q & overlap_q)
+        active_count = active_services.count()
+
+        # Проверка лимита тарифа
+        if active_count >= tarif.count:
+            messages.error(request,f"Превышен лимит тарифа {tarif.name}! Максимум: {tarif.count} Текущее количество: {active_count}")
+            return
+        # Проверка дат
+        if obj.subscription_end and obj.subscription_end <= obj.subscription_start:
+            messages.error(request,"Дата окончания должна быть позже даты начала!")
+            return
+
+        # Сохраняем системные данные
         obj.monitoring_sys = ca_object.sys_mon
         obj.sys_id_obj = ca_object.sys_mon_object_id
-        super().save_model(request, obj, form, change)
+
+        try:
+            super().save_model(request, obj, form, change)
+        except Exception as e:
+            messages.error(request,f"Ошибка сохранения: {e}")
 
     def download_excel(self, request, queryset):
         import openpyxl
