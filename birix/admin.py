@@ -2005,5 +2005,5 @@ admin.site.register(InfoServObj, InfoServObjAdmin)
 admin.site.register(InfoServTarifs, InfoServTarifsAdmin)
 admin.site.register(InfoServTarifClient, InfoServTarifClientAdmin)
 admin.site.register(CellOperator, CellOperatorAdmin)
-admin.site.register(Billing, BillingAdmin)
+#admin.site.register(Billing, BillingAdmin)
 
