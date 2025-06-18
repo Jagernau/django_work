@@ -18,4 +18,9 @@ urlpatterns = [
     path('upload/<int:object_id>/', upload_file_view, name='upload_file'),
     path('print_sticker/<int:device_id>/', print_view, name='print'),
     path('send-sms/', views.send_sms, name='send_sms'),
+    path(
+        'ca_objects/<int:object_id>/check_yandex_files/',
+        views.check_yandex_files,
+        name='check_yandex_files'
+    ),
 ]

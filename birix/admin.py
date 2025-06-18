@@ -262,6 +262,7 @@ class CaObjectsAdmin(LoginRequiredMixin,admin.ModelAdmin):
             "get_sim",
             "sys_mon_object_id",
             "upload_button",
+            "view_file_button",
             )
 
     list_filter = (
@@ -325,6 +326,20 @@ class CaObjectsAdmin(LoginRequiredMixin,admin.ModelAdmin):
     def upload_button(self, obj):
         return mark_safe(f'<a class="button" href="{reverse("upload_file", args=[obj.id])}">Загрузить</a>')
     upload_button.short_description = 'Загрузить файл'
+
+
+    def view_file_button(self, obj):
+        """Кнопка для просмотра файла в Яндекс.Диске"""
+        # Формируем базовое имя файла (без даты)
+        base_name = f"{obj.object_name}".replace('/', '!')
+        # Формируем URL для проверки файлов
+        url = reverse('check_yandex_files', args=[obj.id])
+        return mark_safe(
+            f'<a class="button" href="{url}" style="background-color:#6c5ce7;color:white;">'
+            f'🔍 Просмотреть'
+            f'</a>'
+        )
+    view_file_button.short_description = 'Файлы на диске'
 
     def download_excel(self, request, queryset):
             workbook = openpyxl.Workbook()

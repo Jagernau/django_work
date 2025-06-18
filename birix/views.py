@@ -1,6 +1,6 @@
 from time import sleep
 from django.core.paginator import EmptyPage, PageNotAnInteger, Paginator
-from django.shortcuts import get_object_or_404, render
+from django.shortcuts import get_object_or_404, render, redirect
 from django.views.generic.detail import DetailView
 import requests
 from birix.utils import get_accouns, get_history
@@ -18,8 +18,9 @@ import yadisk
 import os
 from birix.models import CaObjects, Devices, GlobalLogging
 from birix.forms import UploadFileForm, SmsForm
-from django.shortcuts import render
 from birix.sms_sender import MtsSender
+from django.urls import reverse
+
 
 @login_required
 @user_passes_test(lambda u: u.is_superuser)
@@ -504,3 +505,76 @@ def send_sms(request):
         'form': form,
         'results': results
     })
+
+
+import urllib.parse
+import re
+
+@login_required
+def check_yandex_files(request, object_id):
+    """Проверка существования файлов на Яндекс.Диске"""
+    TOKEN = os.getenv('TOKEN_YANDEX')
+    y = yadisk.YaDisk(token=TOKEN)
+    try:
+        ca_object = get_object_or_404(CaObjects, id=object_id)
+        owner_contragent = str(ca_object.contragent).replace('/', '!')
+        folder_path = f"/Автотарировки/{owner_contragent}"
+        
+        files = []
+        if y.is_dir(folder_path):
+            for item in y.listdir(folder_path):
+                if item.name.startswith(ca_object.object_name.replace('/', '!')):
+                    # Правильное формирование ссылки
+                    encoded_folder = urllib.parse.quote(f"Автотарировки/{owner_contragent}")
+                    encoded_file = urllib.parse.quote(item.name)
+                    
+                    web_link = (
+                        f"https://disk.yandex.ru/client/disk/{encoded_folder}"
+                        f"?idApp=client&dialog=slider"
+                        f"&idDialog=%2Fdisk%2F{encoded_folder}%2F{encoded_file}"
+                    )
+                    
+                    files.append({
+                        'name': item.name,
+                        'url': web_link,
+                        'size': item.size,
+                        'modified': item.modified
+                    })
+
+                else:
+                    result = re.findall(r'[АВЕКМНОРСТУХ]\d{3}[АВЕКМНОРСТУХ]{2}(?:\d{2,3})?', ca_object.object_name)
+                    if len(result) >= 1:
+                        item.name.startswith(result[0])
+                        # Правильное формирование ссылки
+                        encoded_folder = urllib.parse.quote(f"Автотарировки/{owner_contragent}")
+                        encoded_file = urllib.parse.quote(item.name)
+                        
+                        web_link = (
+                            f"https://disk.yandex.ru/client/disk/{encoded_folder}"
+                            f"?idApp=client&dialog=slider"
+                            f"&idDialog=%2Fdisk%2F{encoded_folder}%2F{encoded_file}"
+                        )
+                        
+                        files.append({
+                            'name': item.name,
+                            'url': web_link,
+                            'size': item.size,
+                            'modified': item.modified
+                        })
+                    else:
+                        messages.info(request, "Файлы не найдены на Яндекс.Диске")
+                        return redirect('admin:birix_caobjects_changelist')
+
+        
+        if not files:
+            messages.info(request, "Файлы не найдены на Яндекс.Диске")
+            return redirect('admin:birix_caobjects_changelist')
+        
+        return render(request, 'yandex_files.html', {
+            'files': files,
+            'object': ca_object
+        })
+            
+    except Exception as e:
+        messages.error(request, f"Ошибка: {str(e)}")
+        return redirect('admin:birix_caobjects_changelist')

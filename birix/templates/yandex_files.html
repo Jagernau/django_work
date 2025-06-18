@@ -1,0 +1,36 @@
+{% extends "admin/base_site.html" %}
+{% load i18n %}
+
+{% block content %}
+<h1>Файлы для объекта: {{ object.object_name }}</h1>
+<div class="results">
+    <table>
+        <thead>
+            <tr>
+                <th>Имя файла</th>
+                <th>Размер</th>
+                <th>Изменен</th>
+                <th>Действия</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for file in files %}
+            <tr>
+                <td>{{ file.name }}</td>
+                <td>{{ file.size|filesizeformat }}</td>
+                <td>{{ file.modified }}</td>
+                <td>
+                    <a href="{{ file.url }}" target="_blank" 
+                       class="button" style="background-color:#6c5ce7;color:white;">
+                        👁️ Просмотреть
+                    </a>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+<a href="{% url 'admin:birix_caobjects_changelist' %}" class="button">
+    ← Назад к списку
+</a>
+{% endblock %}
