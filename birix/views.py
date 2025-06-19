@@ -541,30 +541,6 @@ def check_yandex_files(request, object_id):
                         'modified': item.modified
                     })
 
-                else:
-                    result = re.findall(r'[АВЕКМНОРСТУХ]\d{3}[АВЕКМНОРСТУХ]{2}(?:\d{2,3})?', ca_object.object_name)
-                    if len(result) >= 1:
-                        item.name.startswith(result[0])
-                        # Правильное формирование ссылки
-                        encoded_folder = urllib.parse.quote(f"Автотарировки/{owner_contragent}")
-                        encoded_file = urllib.parse.quote(item.name)
-                        
-                        web_link = (
-                            f"https://disk.yandex.ru/client/disk/{encoded_folder}"
-                            f"?idApp=client&dialog=slider"
-                            f"&idDialog=%2Fdisk%2F{encoded_folder}%2F{encoded_file}"
-                        )
-                        
-                        files.append({
-                            'name': item.name,
-                            'url': web_link,
-                            'size': item.size,
-                            'modified': item.modified
-                        })
-                    else:
-                        messages.info(request, "Файлы не найдены на Яндекс.Диске")
-                        return redirect('admin:birix_caobjects_changelist')
-
         
         if not files:
             messages.info(request, "Файлы не найдены на Яндекс.Диске")
