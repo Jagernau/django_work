@@ -1538,21 +1538,22 @@ class InfoServObjAdmin(admin.ModelAdmin):
     subscription_end_date.admin_order_field = 'subscription_end'
 
     def specialist_display(self, obj):
-        try:
-            login_user = LoginUsers.objects.get(login=obj.sys_login)
-            return login_user.contragent.service_manager or "Не указан"
-        except (LoginUsers.DoesNotExist, AttributeError):
-            return "Не указан"
+        """Безопасное получение специалиста с обработкой дубликатов"""
+        users = LoginUsers.objects.filter(login=obj.sys_login)
+        if users.exists():
+            # Берем первого пользователя (можно добавить сортировку при необходимости)
+            return users.first().contragent.service_manager or "Не указан"
+        return "Не указан"
     specialist_display.short_description = "Специалист"
 
     
     def client_name_display(self, obj):
-        """Отображаем имя клиента через sys_login → LoginUsers → Contragents"""
-        try:
-            login_user = LoginUsers.objects.get(login=obj.sys_login)
-            return login_user.contragent.ca_name
-        except LoginUsers.DoesNotExist:
-            return "Клиент не найден"
+        """Безопасное получение имени клиента с обработкой дубликатов"""
+        users = LoginUsers.objects.filter(login=obj.sys_login)
+        if users.exists():
+            # Берем первого пользователя
+            return users.first().contragent.ca_name
+        return "Клиент не найден"
     client_name_display.short_description = "Клиент"
     
     def get_queryset(self, request):
