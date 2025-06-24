@@ -867,6 +867,7 @@ class DevicesDiagnostics(models.Model):
     class DeviceTransferChoices(models.IntegerChoices):
         get_CLIENT = 0, 'к Клиенту'
         get_REPAIR = 1, 'в Ремонт'
+        get_REPLACE = 2, 'на Замену'
 
     device = models.ForeignKey(
             Devices, 
