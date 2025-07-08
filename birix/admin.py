@@ -108,7 +108,7 @@ class LoginUsersAdmin(LoginRequiredMixin,admin.ModelAdmin):
             "date_create",
             "contragent__service_manager",
             "contragent__key_manager",
-
+            "account_status",
             )
     search_fields = (
             "client_name",
