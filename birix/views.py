@@ -117,7 +117,7 @@ def not_present_accounts(request):
     ).all()
     results = []
     for i in not_present:
-        if i.contragent == None:
+        if not hasattr(i, 'contragent'):
             client = "Нет привязки к клиенту 1с"
         else:
             client = i.contragent.ca_name
