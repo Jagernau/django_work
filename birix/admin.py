@@ -697,6 +697,7 @@ class DevicesAdmin(LoginRequiredMixin,admin.ModelAdmin):
             "contragent",
             'itprogrammer',
             'get_sim',
+            'coment',
             )
 
     list_filter = (
@@ -707,6 +708,7 @@ class DevicesAdmin(LoginRequiredMixin,admin.ModelAdmin):
             "devices_brand__devices_vendor",
             "sys_mon",
             "device_owner",
+            'coment',
             )
     search_fields = (
             "device_serial",
@@ -714,6 +716,7 @@ class DevicesAdmin(LoginRequiredMixin,admin.ModelAdmin):
             "client_name",
             "name_it",
             "contragent__ca_name",
+            'coment',
 
     )
     fieldsets = (
@@ -727,6 +730,7 @@ class DevicesAdmin(LoginRequiredMixin,admin.ModelAdmin):
                     'sys_mon',
                     'contragent',
                     'itprogrammer',
+                    'coment',
                 )
             }),
     )
@@ -742,6 +746,7 @@ class DevicesAdmin(LoginRequiredMixin,admin.ModelAdmin):
                     'sys_mon',
                     'contragent__ca_id',
                     'itprogrammer',
+                    'coment',
                 )
             })
 
