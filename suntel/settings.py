@@ -33,7 +33,7 @@ DEBUG = env('DEBUG')
 ALLOWED_HOSTS = ['*', ]
 CSRF_TRUSTED_ORIGINS = [
     "https://apisuntel.duckdns.org",
-    "yaclo.suntel-nn.ru"
+    "https://yaclo.suntel-nn.ru"
 ]
 
 
