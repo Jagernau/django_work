@@ -1,11 +1,10 @@
+from time import sleep
 from django.core.paginator import EmptyPage, PageNotAnInteger, Paginator
-from django.shortcuts import get_object_or_404, render
+from django.shortcuts import get_object_or_404, render, redirect
 from django.views.generic.detail import DetailView
 import requests
-import sys
 from birix.utils import get_accouns, get_history
 from datetime import datetime, timedelta, date
-from django.contrib import admin
 import birix.models as models
 from django.contrib.auth.decorators import login_required
 from django.views.generic.edit import UpdateView
@@ -14,15 +13,13 @@ from django.http import HttpResponse
 import pandas as pd
 from django.contrib.auth.decorators import user_passes_test
 from django.contrib.auth.mixins import LoginRequiredMixin
-from django.db.models import Count
 from django.contrib import messages
 import yadisk
-import threading
 import os
-from birix.models import CaObjects
-from birix.models import Devices
-from birix.forms import UploadFileForm
-from django.shortcuts import render
+from birix.models import CaObjects, Devices, GlobalLogging
+from birix.forms import UploadFileForm, SmsForm
+from birix.sms_sender import MtsSender
+from django.urls import reverse
 
 
 @login_required
@@ -120,7 +117,7 @@ def not_present_accounts(request):
     ).all()
     results = []
     for i in not_present:
-        if i.contragent == None:
+        if not hasattr(i, 'contragent'):
             client = "Нет привязки к клиенту 1с"
         else:
             client = i.contragent.ca_name
@@ -308,7 +305,6 @@ def get_stock(request):
             }
             )
 
-
 def print_view(request, device_id):
     device = get_object_or_404(Devices, pk=device_id)
     cont_name = str(device.contragent)
@@ -469,3 +465,92 @@ def __get_request(url):
 
 def get_all_employ(ok_url, ok_token):
     return __get_request(f"{ok_url}v1/employees/list?api_token={ok_token}")
+
+
+
+from django.utils import timezone
+
+def send_sms(request):
+    results = []
+    if request.method == 'POST':
+        form = SmsForm(request.POST)
+        if form.is_valid():
+            phone_numbers = form.cleaned_data['phone_numbers']
+            message = form.cleaned_data['message']
+            for number in phone_numbers:
+                sleep(2)
+                sender = MtsSender()
+                success, detail = sender.send_message(number, message)
+                results.append({
+                    'number': number,
+                    'success': success,
+                    'detail': detail
+                })
+                
+                # Логирование действия
+                GlobalLogging.objects.create(
+                    section_type='SMS',
+                    edit_id=request.user.id if request.user.is_authenticated else 0,
+                    field='phone_number',
+                    old_value=number,
+                    new_value=message[:255],  # Обрезаем сообщение до 255 символов
+                    change_time=timezone.now(),
+                    sys_id=GlobalLogging.SysChoices.null,
+                    action=GlobalLogging.ActionChoices.create
+                )
+    else:
+        form = SmsForm()
+    
+    return render(request, 'send_sms.html', {
+        'form': form,
+        'results': results
+    })
+
+
+import urllib.parse
+import re
+
+@login_required
+def check_yandex_files(request, object_id):
+    """Проверка существования файлов на Яндекс.Диске"""
+    TOKEN = os.getenv('TOKEN_YANDEX')
+    y = yadisk.YaDisk(token=TOKEN)
+    try:
+        ca_object = get_object_or_404(CaObjects, id=object_id)
+        owner_contragent = str(ca_object.contragent).replace('/', '!')
+        folder_path = f"/Автотарировки/{owner_contragent}"
+        
+        files = []
+        if y.is_dir(folder_path):
+            for item in y.listdir(folder_path):
+                if item.name.startswith(ca_object.object_name.replace('/', '!')):
+                    # Правильное формирование ссылки
+                    encoded_folder = urllib.parse.quote(f"Автотарировки/{owner_contragent}")
+                    encoded_file = urllib.parse.quote(item.name)
+                    
+                    web_link = (
+                        f"https://disk.yandex.ru/client/disk/{encoded_folder}"
+                        f"?idApp=client&dialog=slider"
+                        f"&idDialog=%2Fdisk%2F{encoded_folder}%2F{encoded_file}"
+                    )
+                    
+                    files.append({
+                        'name': item.name,
+                        'url': web_link,
+                        'size': item.size,
+                        'modified': item.modified
+                    })
+
+        
+        if not files:
+            messages.info(request, "Файлы не найдены на Яндекс.Диске")
+            return redirect('admin:birix_caobjects_changelist')
+        
+        return render(request, 'yandex_files.html', {
+            'files': files,
+            'object': ca_object
+        })
+            
+    except Exception as e:
+        messages.error(request, f"Ошибка: {str(e)}")
+        return redirect('admin:birix_caobjects_changelist')
