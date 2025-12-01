@@ -16,7 +16,7 @@ from django.contrib.auth.mixins import LoginRequiredMixin
 from django.contrib import messages
 import yadisk
 import os
-from birix.models import CaObjects, Devices, GlobalLogging
+from birix.models import CaObjects, Devices, GlobalLogging, DevicesDiagnostics
 from birix.forms import UploadFileForm, SmsForm
 from birix.sms_sender import MtsSender
 from django.urls import reverse
@@ -554,3 +554,78 @@ def check_yandex_files(request, object_id):
     except Exception as e:
         messages.error(request, f"Ошибка: {str(e)}")
         return redirect('admin:birix_caobjects_changelist')
+
+from django.shortcuts import render, get_object_or_404
+from django.contrib.auth.decorators import login_required
+from .models import DevicesDiagnostics
+
+@login_required
+def print_diagnostic(request, diagnostic_id):
+    """View для отображения печатной версии диагностики"""
+    obj = get_object_or_404(DevicesDiagnostics, id=diagnostic_id)
+    
+    # Проверка прав доступа
+    if not request.user.is_staff:
+        return render(request, '403.html', status=403)
+    
+    # Подготовка данных для таблицы
+    diagnostic_data = []
+    
+    # Основная информация
+    diagnostic_data.append(('Основная информация', '', ''))
+    diagnostic_data.append(('Терминал', str(obj.device), ''))
+    diagnostic_data.append(('Серийный номер', obj.device.device_serial if obj.device else '-', ''))
+    diagnostic_data.append(('IMEI', obj.device.device_imei if obj.device and obj.device.device_imei else '-', ''))
+    diagnostic_data.append(('Клиент', obj.device.contragent.ca_name if obj.device and obj.device.contragent else '-', ''))
+    diagnostic_data.append(('Программист', str(obj.programmer.last_name), ''))
+    diagnostic_data.append(('Принесён', obj.get_brought_display(), ''))
+    diagnostic_data.append(('Заключение', obj.comment or '-', ''))
+    
+    # Даты
+    diagnostic_data.append(('', '', ''))
+    diagnostic_data.append(('Даты', '', ''))
+    diagnostic_data.append(('Дата приёма', obj.accept_date.strftime('%d.%m.%Y %H:%M') if obj.accept_date else '-', ''))
+    diagnostic_data.append(('Дата передачи', obj.transfer_date.strftime('%d.%m.%Y %H:%M') if obj.transfer_date else '-', ''))
+    
+    # Диагностика
+    diagnostic_data.append(('', '', ''))
+    diagnostic_data.append(('Диагностика', '', ''))
+    
+    check_fields = [
+        ('USB_check', 'USB_comment', 'Подключение по USB'),
+        ('PWR_check', 'PWR_comment', 'Основное питание'),
+        ('PWR_AKB_check', 'PWR_AKB_comment', 'Резервное питание'),
+        ('FIRMWARE_check', 'FIRMWARE_comment', 'Прошивка'),
+        ('SATS_check', 'SATS_comment', 'Наличие спутников'),
+        ('GSM_check', 'GSM_comment', 'Наличие GSM сигнала'),
+        ('ONLINE_check', 'ONLINE_comment', 'Терминал онлайн'),
+        ('P485_check', 'P485_comment', 'Порт 485'),
+        ('DIGIT_PORT_check', 'DIGIT_PORT_comment', 'Цифровые входы'),
+        ('ANALOG_PORT_check', 'ANALOG_PORT_comment', 'Аналоговые входы'),
+    ]
+    
+    for check_field, comment_field, label in check_fields:
+        check_value = '✓' if getattr(obj, check_field) else '✗'
+        comment_value = getattr(obj, comment_field) or '-'
+        diagnostic_data.append((label, comment_value, check_value))
+    
+    # Комплектация
+    diagnostic_data.append(('', '', ''))
+    diagnostic_data.append(('Комплектация', '', ''))
+    diagnostic_data.append(('GSM антенна', '✓' if obj.GSM_antenna_check else '✗', ''))
+    diagnostic_data.append(('GPS антенна', '✓' if obj.GPS_antenna_check else '✗', ''))
+    diagnostic_data.append(('Разъем питания', '✓' if obj.CABEL_check else '✗', ''))
+    diagnostic_data.append(('SIM-карта', obj.SIM_comment or '-', '✓' if obj.SIM_check else '✗'))
+    
+    # Передача
+    diagnostic_data.append(('', '', ''))
+    diagnostic_data.append(('Передача устройства', '', ''))
+    diagnostic_data.append(('Куда отдан', obj.get_whom_tranfer_display() if obj.whom_tranfer else '-', ''))
+    
+    context = {
+        'title': f'Акт диагностики терминала {obj.device.device_serial if obj.device else "N/A"}',
+        'object': obj,
+        'diagnostic_data': diagnostic_data,
+    }
+    
+    return render(request, 'devices_diagnostics_print.html', context)
