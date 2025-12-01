@@ -1,7 +1,7 @@
 from django.urls import path
 from . import views
 from birix.views import upload_file_view
-from birix.views import print_view
+from birix.views import print_view, print_diagnostic    
 
 
 urlpatterns = [
@@ -23,4 +23,7 @@ urlpatterns = [
         views.check_yandex_files,
         name='check_yandex_files'
     ),
+
+    path('print_diagnostic/<int:diagnostic_id>/', views.print_diagnostic, name='print_diagnostic'),
+
 ]

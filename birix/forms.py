@@ -62,3 +62,4 @@ class SmsForm(forms.Form):
         if not cleaned_numbers:
             raise forms.ValidationError('Введите хотя бы один номер телефона.')
         return cleaned_numbers
+

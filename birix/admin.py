@@ -12,7 +12,7 @@ from django.urls import reverse, path
 from django.utils.safestring import mark_safe
 from birix.okdesk_funcs import create_okdesk_ticket 
 from rangefilter.filters import DateRangeFilter
-
+from django import forms
 from django.core.exceptions import ValidationError
 from django.db.models import Q
 from django.utils.translation import gettext_lazy as _
@@ -1234,7 +1234,7 @@ class SensorVendorAdmin(admin.ModelAdmin):
             "name",
     )
 
-class DeviceDiagnosicAdmin(admin.ModelAdmin):
+"""class DeviceDiagnosicAdmin(admin.ModelAdmin):
     list_display = (
             "device",
             "get_imei",
@@ -1259,8 +1259,8 @@ class DeviceDiagnosicAdmin(admin.ModelAdmin):
                     "whom_tranfer",
 
                 )
-            })
-    )
+            }),)
+    
     list_filter = (
             ('accept_date', DateRangeFilter),
             ('transfer_date', DateRangeFilter),
@@ -1277,7 +1277,176 @@ class DeviceDiagnosicAdmin(admin.ModelAdmin):
     autocomplete_fields = (
         'device',
     )
+    date_hierarchy = 'transfer_date'"""
+
+class DeviceDiagnosticForm(forms.ModelForm):
+    class Meta:
+        model = DevicesDiagnostics
+        fields = '__all__'
+    
+    def init(self, *args, **kwargs):
+        super().init(*args, **kwargs)
+        # Группировка полей для лучшего отображения
+        for field_name in self.fields:
+            if field_name.endswith('_comment'):
+                self.fields[field_name].widget.attrs.update({
+                    'style': 'width: 250px; margin-left: 10px; vertical-align: middle;'
+                })
+            elif field_name.endswith('_check'):
+                self.fields[field_name].widget.attrs.update({
+                    'style': 'vertical-align: middle; margin-right: 5px;'
+                })
+
+
+class DeviceDiagnosicAdmin(admin.ModelAdmin):
+    form = DeviceDiagnosticForm
+    
+    list_display = (
+        "device",
+        "get_imei",
+        "get_klient",
+        "programmer",
+        "print_button",
+        "brought",
+        "comment",
+        "accept_date",
+        "transfer_date",
+        "whom_tranfer",
+        
+    )
+
+    def print_button(self, obj):
+        if obj.id:
+            # Используем имя URL из urls.py
+            url = reverse('print_diagnostic', args=[obj.id])
+            return format_html(
+                '<a href="{}" target="_blank" class="button" style="background-color: #4CAF50; color: white; padding: 5px 10px; text-decoration: none; border-radius: 3px;">🖨</a>',
+                url
+            )
+        return "-"
+    print_button.short_description = "Печать"
+    print_button.allow_tags = True
+
+    # Определяем поля для разных разделов формы
+    fieldsets = (
+        ('Основная информация', {
+            'fields': (
+                'device',
+                'programmer',
+                'brought',
+                'whom_tranfer',
+            )
+        }),
+        ('Даты', {
+            'fields': (
+                ('accept_date', 'transfer_date'),
+            )
+        }),
+        ('Диагностика', {
+            'fields': (
+                ('USB_comment', 'USB_check'),
+                ('PWR_comment', 'PWR_check'),
+                ('PWR_AKB_comment', 'PWR_AKB_check'),
+                ('FIRMWARE_comment', 'FIRMWARE_check'),
+                ('SATS_comment', 'SATS_check'),
+                ('GSM_comment', 'GSM_check'),
+                ('ONLINE_comment', 'ONLINE_check'),
+                ('P485_comment', 'P485_check'),
+                ('DIGIT_PORT_comment', 'DIGIT_PORT_check'),
+                ('ANALOG_PORT_comment', 'ANALOG_PORT_check'),
+            )
+        }),
+        ('Комплектация', {
+            'fields': (
+                'GSM_antenna_check',
+                'GPS_antenna_check',
+                'CABEL_check',
+                ('SIM_check', 'SIM_comment'),
+            )
+        }),
+        ('', {
+            'fields': (
+                'comment',
+            )
+        }),
+    )
+    
+    # Для формы создания используем ту же структуру
+    add_fieldsets = (
+        ('Основная информация', {
+            'fields': (
+                'device',
+                'programmer',
+                'brought',
+                'whom_tranfer',
+            )
+        }),
+        ('Даты', {
+            'fields': (
+                ('accept_date', 'transfer_date'),
+            )
+        }),
+        ('Диагностика', {
+            'fields': (
+                ('USB_comment', 'USB_check'),
+                ('PWR_comment', 'PWR_check'),
+                ('PWR_AKB_comment', 'PWR_AKB_check'),
+                ('FIRMWARE_comment', 'FIRMWARE_check'),
+                ('SATS_comment', 'SATS_check'),
+                ('GSM_comment', 'GSM_check'),
+                ('ONLINE_comment', 'ONLINE_check'),
+                ('P485_comment', 'P485_check'),
+                ('DIGIT_PORT_comment', 'DIGIT_PORT_check'),
+                ('ANALOG_PORT_comment', 'ANALOG_PORT_check'),
+            )
+        }),
+        ('Комплектация', {
+            'fields': (
+                'GSM_antenna_check',
+                'GPS_antenna_check',
+                'CABEL_check',
+                ('SIM_check', 'SIM_comment'),
+            )
+        }),
+        ('',{
+            'fields': (
+                'comment',
+            )
+        }),
+        )
+
+    def change_view(self, request, object_id, form_url='', extra_context=None):
+        """Добавляем кнопку печати в контекст"""
+        extra_context = extra_context or {}
+        obj = self.get_object(request, object_id)
+        if obj:
+            extra_context['print_url'] = reverse('print_diagnostic', args=[object_id])
+        return super().change_view(request, object_id, form_url, extra_context)
+
+    def get_fieldsets(self, request, obj=None):
+        if not obj:
+            return self.add_fieldsets
+        return super().get_fieldsets(request, obj)
+    
+    list_filter = (
+        ('accept_date', DateRangeFilter),
+        ('transfer_date', DateRangeFilter),
+        'programmer',
+        'brought',
+        'whom_tranfer',
+    )
+    
+    search_fields = (
+        "comment",
+        "device__device_serial",
+        "device__contragent__ca_name",
+        "device__device_imei",
+    )
+    
+    autocomplete_fields = ('device',)
     date_hierarchy = 'transfer_date'
+
+
 
 
     def get_klient(self, obj):

@@ -886,11 +886,7 @@ class DevicesDiagnostics(models.Model):
             verbose_name='Принесён от',
             choices=DeviceBringChoices.choices,
             )
-    comment = models.CharField(
-            max_length=300, 
-            db_comment='Коментарий',
-            verbose_name='Коментарий',
-            )
+
     accept_date = models.DateTimeField(
             db_comment='Дата приёма',
             verbose_name='Дата приёма',
@@ -908,6 +904,177 @@ class DevicesDiagnostics(models.Model):
             verbose_name='Куда отдан',
             choices=DeviceTransferChoices.choices,
             )
+    USB_check = models.BooleanField(
+            default=False,
+            blank=True,
+            null=False,
+            db_comment='Подключение по USB',
+            verbose_name='Подключение по USB',
+            )
+    USB_comment = models.CharField(
+            null=True,
+            blank=True,
+            max_length=60,
+            db_comment='Подключение по USB',
+            verbose_name='Подключение по USB',
+            )
+    PWR_check = models.BooleanField(
+            default=False,
+            blank=True,
+            null=False,
+            db_comment='Основное питание',
+            verbose_name='Основное питание',
+            )
+    PWR_comment = models.CharField(
+            null=True,blank=True,
+            max_length=60,
+            db_comment='Основное питание',
+            verbose_name='Основное питание',
+            )
+    PWR_AKB_check = models.BooleanField(
+            default=False,
+            blank=True,
+            null=False,
+            db_comment='Резервное питание',
+            verbose_name='Резервное питание',
+            )
+    PWR_AKB_comment = models.CharField(
+            null=True,blank=True,
+            max_length=60,
+            db_comment='Резервное питание',
+            verbose_name='Резервное питание',
+            )
+    FIRMWARE_check = models.BooleanField(
+            default=False,
+            blank=True,
+            null=False,
+            db_comment='Прошивка',
+            verbose_name='Прошивка',
+            )
+    FIRMWARE_comment = models.CharField(
+            null=True,blank=True,
+            max_length=60,
+            db_comment='Прошивка',
+            verbose_name='Прошивка',
+            )
+    SATS_check = models.BooleanField(
+            default=False,
+            blank=True,
+            null=False,
+            db_comment='Наличие спутников',
+            verbose_name='Наличие спутников',
+            )
+    SATS_comment = models.CharField(
+            null=True,blank=True,
+            max_length=60,
+            db_comment='Наличие спутников',
+            verbose_name='Наличие спутников',
+            )
+    GSM_check = models.BooleanField(
+            default=False,
+            blank=True,
+            null=False,
+            db_comment='Наличие GSM сигнала',
+            verbose_name='Наличие GSM сигнала',
+            )
+    GSM_comment = models.CharField(
+            null=True,blank=True,
+            max_length=60,
+            db_comment='Наличие GSM сигнала',
+            verbose_name='Наличие GSM сигнала',
+            )
+    ONLINE_check = models.BooleanField(
+            default=False,
+            blank=True,
+            null=False,
+            db_comment='Терминал онлайн',
+            verbose_name='Терминал онлайн',
+            )
+    ONLINE_comment = models.CharField(
+            null=True,blank=True,
+            max_length=60,
+            db_comment='Терминал онлайн',
+            verbose_name='Терминал онлайн',
+            )
+    P485_check = models.BooleanField(
+            default=False,
+            blank=True,
+            null=False,
+            db_comment='Порт 485 (по необходимости)',
+            verbose_name='Порт 485 (по необходимости)',
+            )
+    P485_comment = models.CharField(
+            null=True,blank=True,
+            max_length=60,
+            db_comment='Порт 485 (по необходимости)',
+            verbose_name='Порт 485 (по необходимости)',
+            )
+    DIGIT_PORT_check = models.BooleanField(
+            default=False,
+            blank=True,
+            null=False,
+            db_comment='Цифровые входы',
+            verbose_name='Цифровые входы',
+            )
+    DIGIT_PORT_comment = models.CharField(
+            null=True,blank=True,
+            max_length=60,
+            db_comment='Цифровые входы',
+            verbose_name='Цифровые входы',
+            )
+    ANALOG_PORT_check = models.BooleanField(
+            default=False,
+            blank=True,
+            null=False,
+            db_comment='Аналоговые входы',
+            verbose_name='Аналоговые входы',
+            )
+    ANALOG_PORT_comment = models.CharField(
+            null=True,blank=True,
+            max_length=60,
+            db_comment='Аналоговые входы',
+            verbose_name='Аналоговые входы',
+            )
+    GSM_antenna_check = models.BooleanField(
+            default=False,
+            blank=True,
+            null=False,
+            db_comment='GSM антенна',
+            verbose_name='GSM антенна',
+            )
+    GPS_antenna_check = models.BooleanField(
+            default=False,
+            blank=True,
+            null=False,
+            db_comment='GPS антенна',
+            verbose_name='GPS антенна',
+            )
+    CABEL_check = models.BooleanField(
+            default=False,
+            blank=True,
+            null=False,
+            db_comment='Разъем питания',
+            verbose_name='Разъем питания',
+            )
+    SIM_check = models.BooleanField(
+            default=False,
+            blank=True,
+            null=False,
+            db_comment='SIM-карта',
+            verbose_name='SIM-карта',
+            )
+    SIM_comment = models.CharField(
+            null=True,blank=True,
+            max_length=60,
+            db_comment='',
+            verbose_name='',
+            )
+    comment = models.CharField(
+        max_length=300, 
+        db_comment='Заключение',
+        verbose_name='Заключение',
+        )
+
 
     class Meta:
         managed = False
@@ -1319,7 +1486,7 @@ class ObjectSensors(models.Model):
             blank=True,
             null=True,
             db_comment='Серийный номер датчика',
-            verbose_name='Серийный номер',
+            verbose_name='Серийный ноdevice_serialмер',
             )
     name_installer = models.CharField(
             max_length=150, 

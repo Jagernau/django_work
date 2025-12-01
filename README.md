@@ -1,5 +1,8 @@
 # CMS на Django для работы с БД MySQL suntel
 
+
+
+
 ## Неоходимые предварительные установки
 * Docker
 * Docker Compose
