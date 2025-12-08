@@ -181,10 +181,10 @@
                 <td></td>
             </tr>
             <tr>
-                <td>IMEI</td>
+                <td>SERIAL</td>
                 <td>
                     {% if object.device and object.device.device_imei %}
-                        {{ object.device.device_imei }}
+                        {{ object.device.device_serial }}
                     {% else %}
                         -
                     {% endif %}
