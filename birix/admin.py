@@ -2170,6 +2170,36 @@ class BillingAdmin(admin.ModelAdmin):
             workbook.save(response)
             return response
 
+
+
+class TransferClientAdmin(admin.ModelAdmin):
+    list_display = (
+            "client",
+            "tranfer_sys_mon",
+            "current_sys_mon",
+            "start_trans",
+            "end_trans",
+            "terminal_command",
+            "command_type",
+            "device_model",
+            )
+    # list_filter = (
+    #         "surname",
+    #         "name",
+    #         "position",
+    #         )
+    # search_fields = (
+    #         "surname",
+    #         "name",
+    #         "position",
+    #         "phone",
+    #         "mobiletelephone",
+    #         "email",
+    # )
+    autocomplete_fields = (
+        'client',
+    )
+
 admin.site.register(Contragents, ContragentsAdmin)
 admin.site.register(LoginUsers, LoginUsersAdmin)
 admin.site.register(GlobalLogging, GlobalLogAdmin)
@@ -2196,4 +2226,4 @@ admin.site.register(InfoServTarifs, InfoServTarifsAdmin)
 admin.site.register(InfoServTarifClient, InfoServTarifClientAdmin)
 admin.site.register(CellOperator, CellOperatorAdmin)
 #admin.site.register(Billing, BillingAdmin)
-
+admin.site.register(TransferClient, TransferClientAdmin)

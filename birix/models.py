@@ -1681,6 +1681,29 @@ class SimCards(models.Model):
     def __str__(self):
         return self.sim_iccid
 
+
+class TransferClient(models.Model):
+    class Status(models.IntegerChoices):
+        API = 0, 'API'
+        SMS = 1, 'SMS'
+    trans_id = models.AutoField(primary_key=True, db_comment='Id перевода')
+    client = models.ForeignKey(Contragents, models.DO_NOTHING, db_comment='Id клиента', verbose_name='Имя клиента')
+    tranfer_sys_mon = models.ForeignKey(MonitoringSystem, models.DO_NOTHING, db_comment='Id системы мониторинга на которую нужен перевод.', verbose_name='На какую систему мониторинга.')
+    start_trans = models.DateTimeField(db_comment='Начало перевода', verbose_name='Начало действия перевода',)
+    end_trans = models.DateTimeField(db_comment='Окончание перевода', verbose_name='Конец действия перевода',)
+    terminal_command = models.CharField(max_length=200, db_comment='Команда терминала', verbose_name='Команда терминала',)
+    command_type = models.IntegerField(db_comment='Тип комманды через что отправлять: 0 - API, 1 - sms', choices=Status.choices, verbose_name='Метод перепрограммирования терминала' )
+    device_model = models.ForeignKey(DevicesBrands, models.DO_NOTHING, db_comment='Id модели терминала', verbose_name='Модель терминала',)
+    current_sys_mon = models.ForeignKey(MonitoringSystem, models.DO_NOTHING, db_column='current_sys_mon', related_name='transferclient_current_sys_mon_set', db_comment='Текущая система мониторинга(с какой системы перевести)', verbose_name='Из какой системы переводить',)
+
+    class Meta:
+        managed = False
+        db_table = 'transfer_client'
+        verbose_name = 'Перевод клиентов'
+        verbose_name_plural = 'Переводы клиентов'
+    def __str__(self):
+        return self.client.ca_name
+
 class GroupObjectRetrans(models.Model):
     id_group = models.AutoField(primary_key=True, db_comment='Айдишник')
     obj = models.ForeignKey(

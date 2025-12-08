@@ -42,6 +42,7 @@ class Contragents(models.Model):
     ca_name_contragent = models.CharField(max_length=255, blank=True, null=True, db_comment='НаименованиеКонтрагента')
     service_manager = models.CharField(max_length=100, blank=True, null=True, db_comment='Имя прикреплённого менеджера тех поддержки')
     ok_desk_id = models.IntegerField(blank=True, null=True, db_comment='id в ОК деске')
+    ca_tarif = models.CharField(max_length=20, blank=True, null=True, db_comment='Тариф Клиента')
 
     class Meta:
         managed = False
@@ -67,6 +68,20 @@ class LoginUsers(models.Model):
         db_table_comment = 'Таблица для хранения информации о пользователях систем мониторинга'
 
 
+class PpdkLogging(models.Model):
+    log_id = models.AutoField(primary_key=True, db_comment='Лог')
+    column_name = models.CharField(max_length=200, db_comment='Название колонки')
+    old_val = models.CharField(max_length=700, blank=True, null=True, db_comment='Старое значение')
+    new_val = models.CharField(max_length=700, blank=True, null=True, db_comment='Новое значение')
+    change_date = models.DateTimeField(db_comment='Дата изменения')
+    exist_id = models.IntegerField(blank=True, null=True, db_comment='OST_order_no')
+    type_req = models.CharField(max_length=100, blank=True, null=True, db_comment='Тип изменения')
+
+    class Meta:
+        managed = False
+        db_table = 'PPDK_logging'
+
+
 class PpdkTransneft(models.Model):
     ost_order_no = models.IntegerField(db_column='OST_order_no', db_comment='№ заявки в ОСТ\r\n')  # Field name made lowercase.
     formation_date_app = models.DateTimeField(db_comment='"Дата форми-\r\nрования заявки"\r\n')
@@ -74,14 +89,14 @@ class PpdkTransneft(models.Model):
     organization = models.CharField(max_length=300, db_comment='Организация\r\n')
     type_work = models.CharField(max_length=100, db_comment='Вид работ\r\n')
     vehicle_reg_plate = models.CharField(max_length=100, db_comment='"Регистра-\r\nционный знак ТС"\r\n')
-    vehic_invent_numb = models.CharField(max_length=200, db_comment='Инв. № ТС\r\n')
+    vehic_invent_numb = models.CharField(max_length=200, blank=True, null=True, db_comment='Инв. № ТС\r\n')
     vehic_model = models.CharField(max_length=300, db_comment='Марка, модель ТС')
     vehicle_type = models.CharField(max_length=200, blank=True, null=True, db_comment='Тип ТС\r\n')
     fault = models.CharField(max_length=300, blank=True, null=True, db_comment='Неисправность\r\n')
-    comment = models.CharField(max_length=300, db_comment='Комментарий\r\n')
+    comment = models.CharField(max_length=800, db_comment='Комментарий\r\n')
     date_first_initial = models.DateTimeField(db_comment='"План. дата работ (перво-\r\nначальная предложенная заказчиком)"\r\n')
     plan_date_work = models.DateTimeField(db_comment='План. дата работ (оконча-\r\nтельная)')
-    repair_area = models.CharField(db_column='repair area', max_length=700, blank=True, null=True, db_comment='Площадка ремонта\r\n')  # Field renamed to remove unsuitable characters.
+    repair_area = models.CharField(max_length=700, blank=True, null=True, db_comment='Площадка ремонта\r\n')
     date_transfer_mvdp = models.DateTimeField(db_column='date_transfer_MVDP', blank=True, null=True, db_comment='Дата передачи в МВДП\r\n')  # Field name made lowercase.
     date_agreement_contrac = models.DateTimeField(blank=True, null=True, db_comment='Дата согласования Исполнителем\r\n')
     processing_time = models.DateTimeField(blank=True, null=True, db_comment='Срок обработки\r\n')
@@ -203,9 +218,10 @@ class Billing(models.Model):
     obj_group_id = models.CharField(max_length=400, db_comment='ИД группы объектов')
     obj_id_in_sys = models.CharField(max_length=300, db_comment='ID объекта в системе мониторинга')
     sys_mon_name = models.CharField(max_length=100, db_comment='Название системы мониторинга')
-    client_login = models.CharField(max_length=400, db_comment='Логин клиента')
+    client_login = models.CharField(max_length=400, blank=True, null=True, db_comment='Логин клиента')
     client_kpp = models.CharField(max_length=200, blank=True, null=True, db_comment='Клиентский КПП')
     total_sum = models.IntegerField(blank=True, null=True, db_comment='Итоговая сумма')
+    obj_imei = models.CharField(max_length=100, blank=True, null=True, db_comment='IMEI объекта')
 
     class Meta:
         managed = False
@@ -334,6 +350,31 @@ class DevicesDiagnostics(models.Model):
     accept_date = models.DateTimeField(db_comment='Дата приёма')
     transfer_date = models.DateTimeField(blank=True, null=True, db_comment='Дата передачи')
     whom_tranfer = models.IntegerField(blank=True, null=True, db_comment='Куда отдан:\r\n0 - клиенту\r\n1 - в ремонт')
+    usb_check = models.IntegerField(db_column='USB_check', blank=True, null=True, db_comment='Чек проверка USB')  # Field name made lowercase.
+    pwr_check = models.IntegerField(db_column='PWR_check', blank=True, null=True, db_comment='Чек проверка основного питания')  # Field name made lowercase.
+    pwr_akb_check = models.IntegerField(db_column='PWR_AKB_check', blank=True, null=True, db_comment='Чек проверка резервного питания')  # Field name made lowercase.
+    firmware_check = models.IntegerField(db_column='FIRMWARE_check', blank=True, null=True, db_comment='Чек проверка прошивки')  # Field name made lowercase.
+    sats_check = models.IntegerField(db_column='SATS_check', blank=True, null=True, db_comment='Чек проверка спутников')  # Field name made lowercase.
+    gsm_check = models.IntegerField(db_column='GSM_check', blank=True, null=True, db_comment='Чек проверка GSM')  # Field name made lowercase.
+    online_check = models.IntegerField(db_column='ONLINE_check', blank=True, null=True, db_comment='Чек проверка online')  # Field name made lowercase.
+    p485_check = models.IntegerField(db_column='P485_check', blank=True, null=True, db_comment='Чек проверка 485 порта')  # Field name made lowercase.
+    digit_port_check = models.IntegerField(db_column='DIGIT_PORT_check', blank=True, null=True, db_comment='Чек проверка цифровых входов')  # Field name made lowercase.
+    analog_port_check = models.IntegerField(db_column='ANALOG_PORT_check', blank=True, null=True, db_comment='Чек проверка аналоговых входов')  # Field name made lowercase.
+    gsm_antenna_check = models.IntegerField(db_column='GSM_antenna_check', blank=True, null=True, db_comment='Чек GSM антенна в комплекте')  # Field name made lowercase.
+    gps_antenna_check = models.IntegerField(db_column='GPS_antenna_check', blank=True, null=True, db_comment='Чек GPS антенна в комплекте')  # Field name made lowercase.
+    cabel_check = models.IntegerField(db_column='CABEL_check', blank=True, null=True, db_comment='Чек разъем питания в комплекте')  # Field name made lowercase.
+    sim_check = models.IntegerField(db_column='SIM_check', blank=True, null=True, db_comment='Чек сим в комплекте')  # Field name made lowercase.
+    usb_comment = models.CharField(db_column='USB_comment', max_length=60, blank=True, null=True, db_comment='Комментарий к проверке USB')  # Field name made lowercase.
+    pwr_comment = models.CharField(db_column='PWR_comment', max_length=60, blank=True, null=True, db_comment='Комментарий к проверке основного питания')  # Field name made lowercase.
+    pwr_akb_comment = models.CharField(db_column='PWR_AKB_comment', max_length=60, blank=True, null=True, db_comment='Комментарий к проверке резервного питания')  # Field name made lowercase.
+    firmware_comment = models.CharField(db_column='FIRMWARE_comment', max_length=60, blank=True, null=True, db_comment='Комментарий к проверке прошивки')  # Field name made lowercase.
+    sats_comment = models.CharField(db_column='SATS_comment', max_length=60, blank=True, null=True, db_comment='Комментарий к проверке наличия связи со спутниками')  # Field name made lowercase.
+    gsm_comment = models.CharField(db_column='GSM_comment', max_length=60, blank=True, null=True, db_comment='Комментарий к проверке связи GSM')  # Field name made lowercase.
+    online_comment = models.CharField(db_column='ONLINE_comment', max_length=60, blank=True, null=True, db_comment='Комментарий к проверке онлайна в системе мониторинга')  # Field name made lowercase.
+    p485_comment = models.CharField(db_column='P485_comment', max_length=60, blank=True, null=True, db_comment='Комментарий к проверке 485 порта')  # Field name made lowercase.
+    digit_port_comment = models.CharField(db_column='DIGIT_PORT_comment', max_length=60, blank=True, null=True, db_comment='Комментарий к проверке цифровых портов')  # Field name made lowercase.
+    analog_port_comment = models.CharField(db_column='ANALOG_PORT_comment', max_length=60, blank=True, null=True, db_comment='Комментарий к проверке аналоговых портов')  # Field name made lowercase.
+    sim_comment = models.CharField(db_column='SIM_comment', max_length=60, blank=True, null=True, db_comment='Комментарий к SIM карте')  # Field name made lowercase.
 
     class Meta:
         managed = False
@@ -455,6 +496,29 @@ class DjangoSession(models.Model):
         db_table_comment = 'Таблица для хранения сессий Django Заходов в ЦМС'
 
 
+class EmailsSends(models.Model):
+    send_id = models.BigAutoField(primary_key=True)
+    sends_time = models.DateTimeField(db_comment='Время отправки')
+    email = models.CharField(max_length=100, db_comment='Почта')
+    send_status = models.IntegerField(db_comment='Успешность отправки\r\n0 - отправлено\r\n1 - не отправлено')
+    confir_status = models.IntegerField(db_comment='0 - Не подтверждена\r\n1 - Подтверждена')
+    mail_header = models.CharField(max_length=200, db_comment='Заголовок письма')
+    mail_body = models.TextField(db_comment='Текст рассылки')
+    client_name = models.CharField(max_length=400, db_comment='Имя клиента')
+    sender_mail = models.CharField(max_length=100, db_comment='Почта рассыльщика')
+    user_login = models.CharField(max_length=100, db_comment='Логин юзера запустившего рассылку')
+    uid_header = models.CharField(max_length=200, db_comment='Уникальный ИД темы рассылки')
+    sender_params = models.JSONField(db_comment='Параметры рассылки')
+    attachment_path = models.CharField(max_length=500, blank=True, null=True, db_comment='Место хранения файла')
+    comment = models.CharField(max_length=500, blank=True, null=True, db_comment='Комментарий')
+    send_type = models.IntegerField(db_comment='Через что ведётся рассылка:\r\n0 - почта\r\n1 - ОКДЕСК')
+
+    class Meta:
+        managed = False
+        db_table = 'emails_sends'
+        db_table_comment = 'Таблица по email рассылкам'
+
+
 class EquipmentWarehouse(models.Model):
     id_unit = models.BigAutoField(primary_key=True, db_comment='Идентификатор записи')
     add_date = models.DateTimeField(db_comment='Время регистрации добавления товара на склад')
@@ -537,6 +601,7 @@ class InfoServObj(models.Model):
     sys_login = models.CharField(max_length=100, db_comment='Логин пользователя от системы мониторинга')
     sys_password = models.CharField(max_length=100, db_comment='Пароль пользователя от СМ')
     send_meth = models.IntegerField(blank=True, null=True, db_comment='Способ отправки 0 - ОКДЕСК\r\n1 - MAIL')
+    grouping_sign = models.IntegerField(db_comment='Есть ли группировка')
 
     class Meta:
         managed = False
@@ -546,8 +611,8 @@ class InfoServObj(models.Model):
 
 class InfoServTarifClient(models.Model):
     tarif_client_id = models.AutoField(primary_key=True, db_comment='ИД отношений')
-    tarif = models.ForeignKey('InfoServTarifs', models.DO_NOTHING, db_comment='ID Тарифа')
-    client = models.ForeignKey(Contragents, models.DO_NOTHING, db_comment='ID Клиента')
+    tarif_id = models.IntegerField(db_comment='ID Тарифа')
+    client_id = models.IntegerField(db_comment='ID Клиента')
     start_tarif = models.DateField(blank=True, null=True, db_comment='Начало тарифа у клиента')
     end_tarif = models.DateField(blank=True, null=True, db_comment='Конец тарифа')
 
@@ -778,13 +843,47 @@ class OnecContracts(models.Model):
     detailed_calculations = models.CharField(max_length=200, blank=True, null=True, db_comment='ДетализацияРасчетов')
     unique_partner_identifier = models.CharField(max_length=500, blank=True, null=True, db_comment='УникальныйИдентификаторПартнера')
     unique_counterparty_identifier = models.CharField(max_length=500, blank=True, null=True, db_comment='УникальныйИдентификаторКонтрагента')
-    ok_desk_id = models.IntegerField(blank=True, null=True, db_comment='ID в ОК-деск')
-    unique_contract_identifier = models.CharField(max_length=200, db_comment='УникальныйИдентификаторДоговораКонтрагента')
+    ok_desk_id = models.IntegerField(unique=True, blank=True, null=True, db_comment='ID в ОК-деск')
+    unique_contract_identifier = models.CharField(unique=True, max_length=200, db_comment='УникальныйИдентификаторДоговораКонтрагента')
+    signing_status = models.CharField(max_length=100, blank=True, null=True, db_comment='СтатусПодписания')
 
     class Meta:
         managed = False
         db_table = 'onec_contracts'
         db_table_comment = 'Таблица с договорами из 1С'
+
+
+class OnecOrder(models.Model):
+    order_id = models.AutoField(primary_key=True)
+    order_unic_id = models.CharField(max_length=50, db_comment='УникальныйИдентификаторАктаТО')
+    order_num = models.CharField(max_length=50, db_comment='ЗаказНарядНомер')
+    order_data = models.DateTimeField(db_comment='Дата')
+    edit_date = models.DateTimeField(db_comment='Время создания записи')
+    file_path = models.CharField(unique=True, max_length=200, blank=True, null=True, db_comment='ПутьКФайлу')
+    obj_id = models.IntegerField(blank=True, null=True, db_comment='ВнутреннийIDОбъектаБД2')
+
+    class Meta:
+        managed = False
+        db_table = 'onec_order'
+        db_table_comment = 'Таблица заказ нарядов из 1С'
+
+
+class ReprogTerms(models.Model):
+    reprog_id = models.AutoField(primary_key=True)
+    type_term = models.CharField(max_length=100, blank=True, null=True, db_comment='Тип терминала')
+    imei = models.CharField(unique=True, max_length=100, db_comment='Имей терминала')
+    vehicle_name = models.CharField(max_length=150, blank=True, null=True, db_comment='Имя объекта')
+    client_name = models.CharField(max_length=300, blank=True, null=True, db_comment='Имя клиента')
+    comand_name = models.CharField(max_length=200, blank=True, null=True, db_comment='Название команды')
+    comand = models.CharField(max_length=200, blank=True, null=True, db_comment='Команда')
+    send_type = models.CharField(max_length=200, blank=True, null=True, db_comment='Тип через что была отправка')
+    monitoring_system = models.IntegerField(blank=True, null=True, db_comment='Система мониторинга')
+    full_device_name = models.CharField(max_length=200, blank=True, null=True, db_comment='Полное название типа терминала')
+
+    class Meta:
+        managed = False
+        db_table = 'reprog_terms'
+        db_table_comment = 'Таблица перепрограммирования терминалов'
 
 
 class RequestsFromOkdesk(models.Model):
@@ -813,10 +912,26 @@ class RequestsFromOkdesk(models.Model):
     observers = models.JSONField(blank=True, null=True, db_comment='Наблюдатели')
     assignee = models.JSONField(blank=True, null=True, db_comment='Исполнители')
     parameters = models.JSONField(blank=True, null=True, db_comment='Параметры заявки')
+    source = models.CharField(max_length=100, blank=True, null=True, db_comment='Способ регистрации заявки')
 
     class Meta:
         managed = False
         db_table = 'requests_from_OKDESK'
+
+
+class SenderLogger(models.Model):
+    send_id = models.AutoField(primary_key=True)
+    send_time = models.DateTimeField(db_comment='Время события рассылки')
+    send_mail = models.CharField(max_length=20, blank=True, null=True, db_comment='Почта рассылки')
+    send_client = models.ForeignKey(Contragents, models.DO_NOTHING, blank=True, null=True, db_comment='Ид клиента БД_2')
+    send_client_id_okdesk = models.IntegerField(blank=True, null=True, db_comment='ID клиента ОКДЕСК')
+    send_req_okdesk_id = models.IntegerField(blank=True, null=True, db_comment='ID заявки в окдеск')
+    send_text = models.TextField(blank=True, null=True, db_comment='Текст рассылки')
+
+    class Meta:
+        managed = False
+        db_table = 'sender_logger'
+        db_table_comment = 'Таблица с рассылками'
 
 
 class SensorBrands(models.Model):
@@ -839,6 +954,21 @@ class SensorVendor(models.Model):
         db_table_comment = 'Производители датчиков'
 
 
+class ServiceSubscriptionLog(models.Model):
+    log_id = models.AutoField(primary_key=True, db_comment='ID записи лога')
+    user = models.ForeignKey(AuthUser, models.DO_NOTHING, db_comment='ID пользователя')
+    username = models.CharField(max_length=150, db_comment='Имя пользователя')
+    object = models.ForeignKey(CaObjects, models.DO_NOTHING, db_comment='ID объекта')
+    action = models.CharField(max_length=50, db_comment='Действие')
+    changes = models.TextField(blank=True, null=True, db_comment='Изменения в JSON')
+    change_time = models.DateTimeField(blank=True, null=True, db_comment='Время изменения')
+
+    class Meta:
+        managed = False
+        db_table = 'service_subscription_log'
+        db_table_comment = 'Лог изменений сервисных подписок'
+
+
 class SimCards(models.Model):
     sim_id = models.AutoField(primary_key=True)
     sim_iccid = models.CharField(unique=True, max_length=40, blank=True, null=True, db_comment='ICCID')
@@ -859,6 +989,22 @@ class SimCards(models.Model):
     class Meta:
         managed = False
         db_table = 'sim_cards'
+
+
+class TransferClient(models.Model):
+    trans_id = models.AutoField(primary_key=True, db_comment='Id перевода')
+    client = models.ForeignKey(Contragents, models.DO_NOTHING, db_comment='Id клиента')
+    tranfer_sys_mon = models.ForeignKey(MonitoringSystem, models.DO_NOTHING, db_comment='Id системы мониторинга на которую нужен перевод.')
+    start_trans = models.DateTimeField(db_comment='Начало перевода')
+    end_trans = models.DateTimeField(db_comment='Окончание перевода')
+    terminal_command = models.CharField(max_length=200, db_comment='Команда терминала')
+    command_type = models.IntegerField(db_comment='Тип комманды через что отправлять: 0 - API, 1 - sms')
+    device_model = models.ForeignKey(DevicesBrands, models.DO_NOTHING, db_comment='Id модели терминала')
+    current_sys_mon = models.ForeignKey(MonitoringSystem, models.DO_NOTHING, db_column='current_sys_mon', related_name='transferclient_current_sys_mon_set', db_comment='Текущая система мониторинга(с какой системы перевести)')
+
+    class Meta:
+        managed = False
+        db_table = 'transfer_client'
 
 
 class UserLogging(models.Model):
