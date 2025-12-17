@@ -61,6 +61,7 @@ class LoginUsers(models.Model):
     comment_field = models.CharField(max_length=270, blank=True, null=True, db_comment='Поле с комментариями')
     ca_uid = models.CharField(max_length=100, blank=True, null=True, db_comment='Уникальный id контрагента')
     account_status = models.IntegerField(db_comment='Состояние учётки 0-остановлена, 1-не подтверждена но активна, 2-подтверждена и активна 3 -тестовая\r\n4- Учётка для учёта ТС\r\n\r\n')
+    is_billing = models.IntegerField(blank=True, null=True, db_comment='Билинговый ли аккаунт\r\n0-не Билинговый\r\n1 - Билинговый')
 
     class Meta:
         managed = False
@@ -115,6 +116,19 @@ class PpdkTransneft(models.Model):
         managed = False
         db_table = 'PPDK_transneft'
         db_table_comment = 'Заявки по ППДК транснефть'
+
+
+class AdditionalStatuses(models.Model):
+    id_status = models.AutoField(primary_key=True)
+    add_status_name = models.CharField(max_length=200, db_comment='Имя дополнителя приостановленной причины')
+    status_code = models.IntegerField(db_comment='Код статуса')
+    detail = models.CharField(max_length=300, db_comment='Детальное описание')
+
+    class Meta:
+        managed = False
+        db_table = 'additional_statuses'
+        unique_together = (('add_status_name', 'status_code'),)
+        db_table_comment = 'Таблица дополнительных статусов'
 
 
 class AuthGroup(models.Model):
@@ -280,6 +294,7 @@ class CaObjects(models.Model):
     contragent = models.ForeignKey(Contragents, models.DO_NOTHING, blank=True, null=True)
     ca_uid = models.CharField(max_length=100, blank=True, null=True, db_comment='Уникальный id контрагента')
     ok_desk_id = models.IntegerField(blank=True, null=True, db_comment='ID объекта в ОК-деске')
+    addition_status_id = models.IntegerField(blank=True, null=True, db_comment='ID статуса доп')
 
     class Meta:
         managed = False

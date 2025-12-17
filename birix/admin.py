@@ -98,6 +98,7 @@ class LoginUsersAdmin(LoginRequiredMixin,admin.ModelAdmin):
             "contragent",
             "comment_field",
             "account_status",
+            'is_billing',
             "get_by_manager",
             "get_it_manager",
             )
@@ -109,6 +110,7 @@ class LoginUsersAdmin(LoginRequiredMixin,admin.ModelAdmin):
             "contragent__service_manager",
             "contragent__key_manager",
             "account_status",
+            'is_billing',
             )
     search_fields = (
             "client_name",
@@ -128,6 +130,7 @@ class LoginUsersAdmin(LoginRequiredMixin,admin.ModelAdmin):
                     'contragent',
                     'comment_field',
                     'account_status',
+                    'is_billing',
                 )
             }),
     )
@@ -144,6 +147,7 @@ class LoginUsersAdmin(LoginRequiredMixin,admin.ModelAdmin):
                     'contragent',
                     'comment_field',
                     'account_status',
+                    'is_billing',
                 )
             })
     )
@@ -244,6 +248,62 @@ class LoginUsersAdmin(LoginRequiredMixin,admin.ModelAdmin):
     get_by_manager.short_description = 'Менеджер по продажам'
     get_it_manager.short_description = 'ИТ специалист'
 
+
+class AdditionalStatusFilter(admin.SimpleListFilter):
+    title = _('Причина приостановки')
+    parameter_name = 'additional_status'
+
+    def lookups(self, request, model_admin):
+        # Получаем все возможные значения для фильтра
+        lookups = []
+        
+        # Добавляем вариант "Не указана причина"
+        lookups.append(('no_reason', _('Не указана причина')))
+        
+        # Получаем все дополнительные статусы
+        from .models import AdditionalStatuses  # Импортируйте вашу модель
+        for status in AdditionalStatuses.objects.all():
+            lookups.append((str(status.id_status), status.add_status_name))
+        
+        # Добавляем вариант "Без дополнительного статуса" для объектов со статусом != 5
+        lookups.append(('no_additional', _('Без дополнительного статуса')))
+        
+        return lookups
+
+    def queryset(self, request, queryset):
+        if self.value() == 'no_reason':
+            # Объекты со статусом 5 без дополнительного статуса
+            return queryset.filter(object_status=5, addition_status_id__isnull=True)
+        
+        elif self.value() == 'no_additional':
+            # Объекты со статусом != 5 без дополнительного статуса
+            return queryset.exclude(object_status=5).filter(addition_status_id__isnull=True)
+        
+        elif self.value():
+            # Объекты с конкретным дополнительным статусом
+            return queryset.filter(addition_status_id=self.value())
+        
+        return queryset
+
+class HasAdditionalStatusFilter(admin.SimpleListFilter):
+    title = _('Дополнительный статус')
+    parameter_name = 'has_additional_status'
+
+    def lookups(self, request, model_admin):
+        return (
+            ('yes', _('Есть значение')),
+            ('no', _('Нет значения')),
+        )
+
+    def queryset(self, request, queryset):
+        if self.value() == 'yes':
+            # Для числового поля проверяем только на NULL
+            return queryset.filter(addition_status_id__isnull=False)
+        if self.value() == 'no':
+            # Для числового поля проверяем только на NULL
+            return queryset.filter(addition_status_id__isnull=True)
+        return queryset
+
 class CaObjectsAdmin(LoginRequiredMixin,admin.ModelAdmin):
 
     actions = ['download_excel',]
@@ -254,6 +314,7 @@ class CaObjectsAdmin(LoginRequiredMixin,admin.ModelAdmin):
             "sys_mon",
             "object_name",
             "object_status",
+            'get_additional',
             "owner_contragent",
             "owner_user",
             "contragent",
@@ -268,6 +329,8 @@ class CaObjectsAdmin(LoginRequiredMixin,admin.ModelAdmin):
     list_filter = (
             "object_status",
             "sys_mon",
+            AdditionalStatusFilter,
+            HasAdditionalStatusFilter,
 #            "contragent",
 #            "contragent",
             )
@@ -306,6 +369,17 @@ class CaObjectsAdmin(LoginRequiredMixin,admin.ModelAdmin):
                         Devices.objects.filter(device_imei=obj.imei).first().devices_brand,
                         ]
 
+
+    def get_additional(self, obj):
+        if obj.addition_status_id == None and obj.object_status == 5:
+            return 'Не указана причина'
+        if obj.addition_status_id == None and obj.object_status != 5:
+            return '-' 
+        if obj.addition_status_id and AdditionalStatuses.objects.filter(id_status=obj.addition_status_id):
+            return [
+                    AdditionalStatuses.objects.filter(id_status=obj.addition_status_id).first().add_status_name,
+                    ]
+
     def get_sim(self, obj):
         if SimCards.objects.filter(terminal_imei=obj.imei).first():
             if obj.imei == None:
@@ -321,6 +395,7 @@ class CaObjectsAdmin(LoginRequiredMixin,admin.ModelAdmin):
 
     get_device.short_description = 'Терминал'
     get_sim.short_description = 'Симкарта'
+    get_additional.short_description = 'Причина приост'
 
 
     def upload_button(self, obj):
@@ -342,34 +417,123 @@ class CaObjectsAdmin(LoginRequiredMixin,admin.ModelAdmin):
     view_file_button.short_description = 'Файлы на диске'
 
     def download_excel(self, request, queryset):
-            workbook = openpyxl.Workbook()
-            worksheet = workbook.active
-            worksheet.title = "CaObjects Data"
-
-            # Write headers
-            header_row = ["sys_mon", "object_name", "object_status", "owner_contragent", "owner_user", "contragent", "imei"]
-            for col_num, header in enumerate(header_row, 1):
-                worksheet.cell(row=1, column=col_num).value = header
-
-            # Write data rows
-            row_num = 2
-            for caobject in queryset:
-                worksheet.cell(row=row_num, column=1).value = str(caobject.sys_mon)
-                worksheet.cell(row=row_num, column=2).value = str(caobject.object_name)
-                worksheet.cell(row=row_num, column=3).value = str(caobject.object_status)
-                worksheet.cell(row=row_num, column=4).value = str(caobject.owner_contragent)
-                worksheet.cell(row=row_num, column=5).value = str(caobject.owner_user)
-                worksheet.cell(row=row_num, column=6).value = str(caobject.contragent)
-                worksheet.cell(row=row_num, column=7).value = str(caobject.imei)
-                row_num += 1
-
-            # Set content type and attachment filename
-            response = HttpResponse(content_type='application/vnd.ms-excel')
-            response['Content-Disposition'] = 'attachment; filename=caobjects.xlsx'
-
-            # Write workbook to response
-            workbook.save(response)
-            return response
+        import openpyxl
+        from openpyxl.utils import get_column_letter
+        from django.http import HttpResponse
+        from django.utils import timezone
+        import re
+        
+        # Создаем книгу и лист
+        workbook = openpyxl.Workbook()
+        worksheet = workbook.active
+        worksheet.title = "Объекты"
+        
+        # Определяем заголовки на основе list_display
+        headers = []
+        for field_name in self.list_display:
+            if field_name == 'get_additional':
+                headers.append('Причина приостановки')
+            elif field_name == 'get_device':
+                headers.append('Терминал')
+            elif field_name == 'get_sim':
+                headers.append('SIM-карта')
+            elif field_name in ['upload_button', 'view_file_button']:
+                continue  # Пропускаем кнопки
+            else:
+                # Получаем verbose_name поля из модели
+                try:
+                    field = CaObjects._meta.get_field(field_name)
+                    headers.append(str(field.verbose_name))
+                except:
+                    headers.append(field_name.replace('_', ' ').title())
+        
+        # Записываем заголовки
+        for col_num, header in enumerate(headers, 1):
+            cell = worksheet.cell(row=1, column=col_num)
+            cell.value = header
+            cell.font = openpyxl.styles.Font(bold=True)
+            cell.fill = openpyxl.styles.PatternFill(start_color="DDDDDD", end_color="DDDDDD", fill_type="solid")
+        
+        # Записываем данные
+        row_num = 2
+        for obj in queryset:
+            col_num = 1
+            
+            for field_name in self.list_display:
+                # Пропускаем кнопки
+                if field_name in ['upload_button', 'view_file_button']:
+                    continue
+                
+                try:
+                    if field_name == 'get_additional':
+                        value = self.get_additional(obj)
+                        # Преобразуем список в строку, если нужно
+                        if isinstance(value, list):
+                            value = ', '.join(str(item) for item in value if item)
+                    elif field_name == 'get_device':
+                        value = self.get_device(obj)
+                        if isinstance(value, list):
+                            value = ', '.join(str(item) for item in value if item)
+                    elif field_name == 'get_sim':
+                        value = self.get_sim(obj)
+                        if isinstance(value, list):
+                            value = ', '.join(str(item) for item in value if item)
+                    else:
+                        # Получаем значение поля модели
+                        field_value = getattr(obj, field_name)
+                        
+                        # Если это связанный объект, получаем его строковое представление
+                        if hasattr(field_value, '__str__') and not isinstance(field_value, (str, int, float, bool, type(None))):
+                            value = str(field_value)
+                        else:
+                            value = field_value
+                    
+                    # Обрабатываем специальные случаи
+                    if value is None:
+                        value = ''
+                    elif isinstance(value, bool):
+                        value = 'Да' if value else 'Нет'
+                    elif hasattr(value, '__str__'):
+                        value = str(value)
+                    
+                    # Очищаем значение от HTML тегов, если они есть
+                    if isinstance(value, str):
+                        value = re.sub(r'<[^>]+>', '', value)
+                    
+                    worksheet.cell(row=row_num, column=col_num).value = value
+                    col_num += 1
+                    
+                except Exception as e:
+                    worksheet.cell(row=row_num, column=col_num).value = f'Error: {str(e)}'
+                    col_num += 1
+            
+            row_num += 1
+        
+        # Автоматически подбираем ширину столбцов
+        for column in worksheet.columns:
+            max_length = 0
+            column_letter = get_column_letter(column[0].column)
+            for cell in column:
+                try:
+                    if cell.value and len(str(cell.value)) > max_length:
+                        max_length = len(str(cell.value))
+                except:
+                    pass
+            adjusted_width = (max_length + 2) * 1.2
+            worksheet.column_dimensions[column_letter].width = min(adjusted_width, 50)
+        
+        # Создаем HTTP ответ
+        response = HttpResponse(
+            content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+        )
+        
+        # Формируем имя файла с текущей датой
+        filename = f'caobjects_export_{timezone.now().strftime("%Y%m%d_%H%M%S")}.xlsx'
+        response['Content-Disposition'] = f'attachment; filename={filename}'
+        
+        # Сохраняем книгу в ответ
+        workbook.save(response)
+        return response
 
 
 class GlobalLogAdmin(LoginRequiredMixin,admin.ModelAdmin):

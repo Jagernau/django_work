@@ -167,6 +167,9 @@ class LoginUsers(models.Model):
         verified = 2, 'Подверждена и активирована'
         testing = 3, "Тестовая"
         fake = 4, "Фейковая. Для учёта ТС"
+    class BillingChoices(models.IntegerChoices):
+        not_in_billing = 0, 'Не биллинговая'
+        in_billing = 1, 'Биллинговая учётка'
 
     client_name = models.CharField(
             max_length=200, 
@@ -232,6 +235,16 @@ class LoginUsers(models.Model):
             verbose_name='Статус аккаунта',
             choices=StatusChoices.choices,
             )
+    is_billing = models.SmallIntegerField(
+            blank=True,
+            null=True,
+            db_comment='На билинге',
+            verbose_name='Признак биллинговости',
+            choices=BillingChoices.choices,
+            default=BillingChoices.in_billing
+            )
+
+
     def clean(self):
         super().clean()
         login_str = str(self.login)
@@ -250,6 +263,22 @@ class LoginUsers(models.Model):
 
     def __str__(self):
         return self.login
+
+
+class AdditionalStatuses(models.Model):
+    id_status = models.AutoField(primary_key=True)
+    add_status_name = models.CharField(max_length=200, db_comment='Имя дополнителя приостановленной причины')
+    status_code = models.IntegerField(db_comment='Код статуса')
+    detail = models.CharField(max_length=300, db_comment='Детальное описание')
+
+    class Meta:
+        managed = False
+        db_table = 'additional_statuses'
+        unique_together = (('add_status_name', 'status_code'),)
+        db_table_comment = 'Таблица дополнительных статусов'
+
+    def __str__(self):
+        return self.add_status_name
 
 class AuthGroup(models.Model):
     name = models.CharField(unique=True, max_length=150)
@@ -667,6 +696,12 @@ class CaObjects(models.Model):
             null=True,
             db_comment='ID объекта в ОК-деске',
             verbose_name='ID объекта в Okdesk',
+            )
+    addition_status_id = models.IntegerField(
+            blank=True, 
+            null=True, 
+            db_comment='ID статуса доп',
+            verbose_name='ID причины приостановки',
             )
 
     class Meta:
