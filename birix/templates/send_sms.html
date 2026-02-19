@@ -1,0 +1,60 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<div class="container mt-5">
+    <div class="row justify-content-center">
+        <div class="col-md-8">
+            <div class="card shadow">
+                <div class="card-header bg-primary text-white">
+                    <h2 class="mb-0">Отправка SMS</h2>
+                </div>
+                <div class="card-body">
+                    <form method="post">
+                        {% csrf_token %}
+                        
+                        <div class="mb-3">
+                            <label for="{{ form.phone_numbers.id_for_label }}" class="form-label">Номера телефонов</label>
+                            {{ form.phone_numbers }}
+                            <div class="form-text">Введите номера через запятую или с новой строки<br>Строго 79000000000</div>
+                        </div>
+
+                        <div class="mb-4">
+                            <label for="{{ form.message.id_for_label }}" class="form-label">Сообщение</label>
+                            {{ form.message }}
+                        </div>
+
+                        <div class="d-grid gap-2">
+                            <button type="submit" class="btn btn-primary btn-lg">
+                                <i class="bi bi-send me-2"></i>Отправить
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+
+            {% if results %}
+            <div class="card mt-4 shadow">
+                <div class="card-header bg-secondary text-white">
+                    <h3 class="mb-0">Результаты отправки</h3>
+                </div>
+                <div class="card-body p-0">
+                    <ul class="list-group list-group-flush">
+                        {% for result in results %}
+                        <li class="list-group-item d-flex justify-content-between align-items-start {% if result.success %}list-group-item-success{% else %}list-group-item-danger{% endif %}">
+                            <div class="ms-2 me-auto">
+                                <div class="fw-bold">Номер {{ result.number }}</div>
+                                {{ result.detail }}
+                            </div>
+                            <span class="badge bg-light text-dark rounded-pill">
+                                {% if result.success %}<i class="bi bi-check2-circle"></i>{% else %}<i class="bi bi-x-circle"></i>{% endif %}
+                            </span>
+                        </li>
+                        {% endfor %}
+                    </ul>
+                </div>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+{% endblock %}

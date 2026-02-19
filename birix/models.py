@@ -142,6 +142,14 @@ class Contragents(models.Model):
             db_comment='Телефон ',
             verbose_name='Телефон',
             )
+    ok_desk_id = models.IntegerField(
+            blank=True,
+            null=True,
+            db_comment='id в ОК деске',
+            verbose_name='ID контрагента в Okdesk',
+            )
+
+    service_manager = models.CharField(max_length=100, blank=True, null=True, db_comment='Имя прикреплённого менеджера тех поддержки')
 
     class Meta:
         managed = False
@@ -158,6 +166,7 @@ class LoginUsers(models.Model):
         inactive = 0, "Заблокирована"
         verified = 2, 'Подверждена и активирована'
         testing = 3, "Тестовая"
+        fake = 4, "Фейковая. Для учёта ТС"
 
     client_name = models.CharField(
             max_length=200, 
@@ -317,6 +326,187 @@ class AuthUserUserPermissions(models.Model):
         unique_together = (('user', 'permission'),)
 
 
+class Billing(models.Model):
+    bil_id = models.AutoField(primary_key=True, db_comment='ID билинга')
+    sys_mon = models.ForeignKey(
+            'MonitoringSystem', 
+            models.DO_NOTHING, 
+            db_comment='ID системы мониторинга',
+            verbose_name='ID системы мониторинга',
+            )
+    sys_mon_price = models.IntegerField(
+            db_comment='Стоимость СМ для КЛ',
+            verbose_name='Стоимость СМ для КЛ',
+            )
+    retrans = models.ForeignKey(
+            'ObjectRetranslators', 
+            models.DO_NOTHING, blank=True, 
+            null=True, 
+            db_comment='ID ретрансляции',
+            verbose_name='ID ретрансляции',
+            )
+    retrans_name = models.CharField(
+            max_length=50,
+            blank=True, 
+            null=True, 
+            db_comment='Название ретрансляции',
+            verbose_name='Название ретрансляции',
+            )
+    retrans_price = models.IntegerField(
+            blank=True, 
+            null=True, 
+            db_comment='Цена ретрансляции',
+            verbose_name='Цена ретрансляции',
+            )
+    obj = models.ForeignKey(
+            'CaObjects',
+            models.DO_NOTHING,
+            db_comment='ID объекта в БД',
+            verbose_name='ID объекта в БД',
+            )
+    obj_name = models.CharField(
+            max_length=100, 
+            db_comment='Название объекта',
+            verbose_name='Название объекта',
+            )
+    sim = models.ForeignKey(
+            'SimCards', 
+            models.DO_NOTHING,
+            blank=True, 
+            null=True,
+            db_comment='ID СИМКАРТЫ',
+            verbose_name='ID СИМКАРТЫ',
+            )
+    sim_operat_name = models.CharField(
+            max_length=50, 
+            blank=True, 
+            null=True,
+            db_comment='Имя оператора',
+            verbose_name='Имя оператора',
+            )
+    sim_price = models.IntegerField(
+            blank=True,
+            null=True,
+            db_comment='Цена сим для КЛ',
+            verbose_name='Цена сим для КЛ',
+            )
+    client = models.ForeignKey(
+            Contragents, 
+            models.DO_NOTHING, 
+            blank=True, 
+            null=True, 
+            db_comment='ID клиента',
+            verbose_name='ID клиента',
+            )
+    client_name = models.CharField(
+            max_length=300,
+            blank=True,
+            null=True, 
+            db_comment='Имя клиента',
+            verbose_name='Имя клиента',
+            )
+    client_inn = models.CharField(
+            max_length=200, 
+            blank=True,
+            null=True, 
+            db_comment='ИНН Клиента',
+            verbose_name='ИНН Клиента',
+            )
+    discount_client = models.JSONField(
+            blank=True, 
+            null=True, 
+            db_comment="СКИДКИ КЛИЕНТА\r\n[{'dis_id': 1, 'dis_name': 'Лояльность'},\r\n {'dis_id': 2, 'dis_name': 'Кол-во объектов > 50'},\r\n]",
+            verbose_name='СКИДКИ КЛИЕНТА',
+            )
+    discount_client_rate = models.IntegerField(
+            blank=True, 
+            null=True, 
+            db_comment='Итоговый процент Скидки',
+            verbose_name='Итоговый процент СКИДКИ КЛИЕНТА',
+            )
+    obj_status = models.ForeignKey(
+            'ObjectStatuses', 
+            models.DO_NOTHING, 
+            db_comment='ID статуса объекта',
+            verbose_name='ID статуса объекта',
+            )
+    discount_obj = models.JSONField(
+            blank=True,
+            null=True, 
+            db_comment="СКИДКИ ОБЪЕКТА [{'dis_id': 1, 'dis_name': 'Лояльность'}, {'dis_id': 2, 'dis_name': 'Дружественный'}, ]",
+            verbose_name='СКИДКИ ОБЪЕКТА',
+            )
+    discount_obj_rate = models.IntegerField(
+            blank=True, 
+            null=True, 
+            db_comment='Процент скидок на объект',
+            verbose_name='Процент скидок на объект',
+            )
+    record_time = models.DateTimeField(
+            db_comment='Время создания записи',
+            verbose_name='Время записи',
+            )
+    obj_status_name = models.CharField(
+            max_length=50, 
+            db_comment='Имя статуса объекта',
+            verbose_name='Имя статуса объекта',
+            )
+    obj_group_name = models.CharField(
+            max_length=400, 
+            blank=True, 
+            null=True, 
+            db_comment='Название группы объектов как в СМ',
+            verbose_name='Группа объектов в СМ',
+            )
+    obj_group_id = models.CharField(
+            max_length=400, 
+            db_comment='ИД группы объектов',
+            verbose_name='ИД группы объектов',
+            )
+    obj_id_in_sys = models.CharField(
+            max_length=300,
+            db_comment='ID объекта в системе мониторинга',
+            verbose_name='ID объекта в системе',
+            )
+    sys_mon_name = models.CharField(
+            max_length=100, 
+            db_comment='Название системы мониторинга',
+            verbose_name='Система мониторинга',
+            )
+    client_login = models.CharField(
+            max_length=400, 
+            db_comment='Логин клиента',
+            verbose_name='Логин клиента',
+            )
+    client_kpp = models.CharField(
+            max_length=200, 
+            blank=True, 
+            null=True, 
+            db_comment='Клиентский КПП',
+            verbose_name='Клиентский КПП',
+            )
+    total_sum = models.IntegerField(
+            blank=True, 
+            null=True, 
+            db_comment='Итоговая сумма',
+            verbose_name='Итоговая сумма',
+            )
+    obj_imei = models.CharField(
+            max_length=200, 
+            blank=True, 
+            null=True, 
+            db_comment='ИМЕЙ объекта',
+            verbose_name='IMEI объекта',
+            )
+
+    class Meta:
+        managed = False
+        db_table = 'billing'
+        db_table_comment = 'Таблица снимок параметров билинга за день'
+        verbose_name = '10_Биллинг'
+        verbose_name_plural = '10_Биллинги'
+
+
 class CaContacts(models.Model):
     class PositionChoices(models.TextChoices):
         DIRECTOR = 'Директор', 'Директор'
@@ -471,6 +661,12 @@ class CaObjects(models.Model):
             blank=True, 
             null=True,
             verbose_name='Контрагент как в 1С',
+            )
+    ok_desk_id = models.IntegerField(
+            blank=True,
+            null=True,
+            db_comment='ID объекта в ОК-деске',
+            verbose_name='ID объекта в Okdesk',
             )
 
     class Meta:
@@ -671,6 +867,7 @@ class DevicesDiagnostics(models.Model):
     class DeviceTransferChoices(models.IntegerChoices):
         get_CLIENT = 0, 'к Клиенту'
         get_REPAIR = 1, 'в Ремонт'
+        get_REPLACE = 2, 'на Замену'
 
     device = models.ForeignKey(
             Devices, 
@@ -689,11 +886,7 @@ class DevicesDiagnostics(models.Model):
             verbose_name='Принесён от',
             choices=DeviceBringChoices.choices,
             )
-    comment = models.CharField(
-            max_length=300, 
-            db_comment='Коментарий',
-            verbose_name='Коментарий',
-            )
+
     accept_date = models.DateTimeField(
             db_comment='Дата приёма',
             verbose_name='Дата приёма',
@@ -711,6 +904,177 @@ class DevicesDiagnostics(models.Model):
             verbose_name='Куда отдан',
             choices=DeviceTransferChoices.choices,
             )
+    USB_check = models.BooleanField(
+            default=False,
+            blank=True,
+            null=False,
+            db_comment='Подключение по USB',
+            verbose_name='Подключение по USB',
+            )
+    USB_comment = models.CharField(
+            null=True,
+            blank=True,
+            max_length=60,
+            db_comment='Подключение по USB',
+            verbose_name='Подключение по USB',
+            )
+    PWR_check = models.BooleanField(
+            default=False,
+            blank=True,
+            null=False,
+            db_comment='Основное питание',
+            verbose_name='Основное питание',
+            )
+    PWR_comment = models.CharField(
+            null=True,blank=True,
+            max_length=60,
+            db_comment='Основное питание',
+            verbose_name='Основное питание',
+            )
+    PWR_AKB_check = models.BooleanField(
+            default=False,
+            blank=True,
+            null=False,
+            db_comment='Резервное питание',
+            verbose_name='Резервное питание',
+            )
+    PWR_AKB_comment = models.CharField(
+            null=True,blank=True,
+            max_length=60,
+            db_comment='Резервное питание',
+            verbose_name='Резервное питание',
+            )
+    FIRMWARE_check = models.BooleanField(
+            default=False,
+            blank=True,
+            null=False,
+            db_comment='Прошивка',
+            verbose_name='Прошивка',
+            )
+    FIRMWARE_comment = models.CharField(
+            null=True,blank=True,
+            max_length=60,
+            db_comment='Прошивка',
+            verbose_name='Прошивка',
+            )
+    SATS_check = models.BooleanField(
+            default=False,
+            blank=True,
+            null=False,
+            db_comment='Наличие спутников',
+            verbose_name='Наличие спутников',
+            )
+    SATS_comment = models.CharField(
+            null=True,blank=True,
+            max_length=60,
+            db_comment='Наличие спутников',
+            verbose_name='Наличие спутников',
+            )
+    GSM_check = models.BooleanField(
+            default=False,
+            blank=True,
+            null=False,
+            db_comment='Наличие GSM сигнала',
+            verbose_name='Наличие GSM сигнала',
+            )
+    GSM_comment = models.CharField(
+            null=True,blank=True,
+            max_length=60,
+            db_comment='Наличие GSM сигнала',
+            verbose_name='Наличие GSM сигнала',
+            )
+    ONLINE_check = models.BooleanField(
+            default=False,
+            blank=True,
+            null=False,
+            db_comment='Терминал онлайн',
+            verbose_name='Терминал онлайн',
+            )
+    ONLINE_comment = models.CharField(
+            null=True,blank=True,
+            max_length=60,
+            db_comment='Терминал онлайн',
+            verbose_name='Терминал онлайн',
+            )
+    P485_check = models.BooleanField(
+            default=False,
+            blank=True,
+            null=False,
+            db_comment='Порт 485 (по необходимости)',
+            verbose_name='Порт 485 (по необходимости)',
+            )
+    P485_comment = models.CharField(
+            null=True,blank=True,
+            max_length=60,
+            db_comment='Порт 485 (по необходимости)',
+            verbose_name='Порт 485 (по необходимости)',
+            )
+    DIGIT_PORT_check = models.BooleanField(
+            default=False,
+            blank=True,
+            null=False,
+            db_comment='Цифровые входы',
+            verbose_name='Цифровые входы',
+            )
+    DIGIT_PORT_comment = models.CharField(
+            null=True,blank=True,
+            max_length=60,
+            db_comment='Цифровые входы',
+            verbose_name='Цифровые входы',
+            )
+    ANALOG_PORT_check = models.BooleanField(
+            default=False,
+            blank=True,
+            null=False,
+            db_comment='Аналоговые входы',
+            verbose_name='Аналоговые входы',
+            )
+    ANALOG_PORT_comment = models.CharField(
+            null=True,blank=True,
+            max_length=60,
+            db_comment='Аналоговые входы',
+            verbose_name='Аналоговые входы',
+            )
+    GSM_antenna_check = models.BooleanField(
+            default=False,
+            blank=True,
+            null=False,
+            db_comment='GSM антенна',
+            verbose_name='GSM антенна',
+            )
+    GPS_antenna_check = models.BooleanField(
+            default=False,
+            blank=True,
+            null=False,
+            db_comment='GPS антенна',
+            verbose_name='GPS антенна',
+            )
+    CABEL_check = models.BooleanField(
+            default=False,
+            blank=True,
+            null=False,
+            db_comment='Разъем питания',
+            verbose_name='Разъем питания',
+            )
+    SIM_check = models.BooleanField(
+            default=False,
+            blank=True,
+            null=False,
+            db_comment='SIM-карта',
+            verbose_name='SIM-карта',
+            )
+    SIM_comment = models.CharField(
+            null=True,blank=True,
+            max_length=60,
+            db_comment='',
+            verbose_name='',
+            )
+    comment = models.CharField(
+        max_length=300, 
+        db_comment='Заключение',
+        verbose_name='Заключение',
+        )
+
 
     class Meta:
         managed = False
@@ -1122,7 +1486,7 @@ class ObjectSensors(models.Model):
             blank=True,
             null=True,
             db_comment='Серийный номер датчика',
-            verbose_name='Серийный номер',
+            verbose_name='Серийный ноdevice_serialмер',
             )
     name_installer = models.CharField(
             max_length=150, 
@@ -1502,6 +1866,10 @@ class InfoServObj(models.Model):
         AUTO = 0, 'Отправка без проверки'
         CHECK = 1, 'Проверить ИТ специалистом'
 
+    class Sends(models.IntegerChoices):
+        OKDESK = 0, 'В ОКДЕСК'
+        MAIL = 1, 'НА ПОЧТУ'
+
     serv_obj_id = models.AutoField(primary_key=True, db_comment='ID подписки')
     serv_obj_sys_mon = models.ForeignKey(CaObjects, models.DO_NOTHING, db_comment='Внутренний ID объекта\r\nБазы данных из СМ',verbose_name='Объект')
     info_obj_serv = models.ForeignKey('InformationServices', models.DO_NOTHING, db_comment='ID ведёт сервисам', verbose_name='Сервис')
@@ -1514,16 +1882,51 @@ class InfoServObj(models.Model):
     sys_id_obj = models.CharField(max_length=100, db_comment='ID объекта в системе мониторинга', verbose_name='ИД в системе мониторинга')
     sys_login = models.CharField(max_length=100, db_comment='Логин пользователя от системы мониторинга',verbose_name='Логин пользователя')
     sys_password = models.CharField(max_length=100, db_comment='Пароль пользователя', verbose_name='Пароль пользователя')
+    send_meth = models.IntegerField(db_comment='0 - ОКДЕСК\r\n1 - ПОЧТОЙ', verbose_name='СПОСОБ ОТПРАВКИ', choices=Sends.choices)
 
     class Meta:
         managed = False
         db_table = 'info_serv_obj'
         db_table_comment = 'Объекты с информационными сервисами'
-        verbose_name = 'Отчёт'
-        verbose_name_plural = 'Отчёт'
+        verbose_name = 'Объект на сервисе'
+        verbose_name_plural = 'Объекты на сервисе'
 
     def __str__(self):
         return self.sys_id_obj
+
+
+class InfoServTarifClient(models.Model):
+    tarif_client_id = models.AutoField(primary_key=True, db_comment='ИД отношений')
+    tarif = models.ForeignKey('InfoServTarifs', models.DO_NOTHING, db_comment='ID Тарифа',verbose_name='Тариф')
+    client = models.ForeignKey(Contragents, models.DO_NOTHING, db_comment='ID Клиента',verbose_name='Клиент')
+    start_tarif = models.DateField(blank=False, null=False, db_comment='Начало тарифа', verbose_name='Дата начала тарифа')
+    end_tarif = models.DateField(blank=False, null=False, db_comment='Начало тарифа', verbose_name='Дата окончания тарифа')
+
+
+    class Meta:
+        managed = False
+        db_table = 'info_serv_tarif_client'
+        db_table_comment = 'Сопоставление ТАРИФ СЕРВИСОВ КЛИЕНТ'
+        verbose_name = 'Тариф по сервисам у КЛИЕНТА'
+        verbose_name_plural = 'Тарифы по сервисам у КЛИЕНТА'
+
+
+class InfoServTarifs(models.Model):
+    tarif_id = models.AutoField(primary_key=True, db_comment='ИД тарифов')
+    name = models.CharField(max_length=100, db_comment='Название тарифа',verbose_name='Название тарифа')
+    price = models.IntegerField(db_comment='Цена тарифа',verbose_name='Цена тарифа')
+    count = models.IntegerField(db_comment='Цена тарифа',verbose_name='Возможность подключения сервисов')
+
+
+    class Meta:
+        managed = False
+        db_table = 'info_serv_tarifs'
+        db_table_comment = 'Таблица с ТАРИФАМИ СЕРВИСОВ'
+        verbose_name = 'Тариф по сервисам'
+        verbose_name_plural = 'Тарифы по сервисам'
+
+    def __str__(self):
+        return self.name
 
 class InformationServices(models.Model):
     serv_id = models.AutoField(primary_key=True, db_comment='ID Сервиса')
@@ -1539,3 +1942,24 @@ class InformationServices(models.Model):
 
     def __str__(self):
         return self.serv_name
+
+
+class OnecContacts(models.Model):
+    contact_id = models.AutoField(primary_key=True, db_comment='Идентификатор Контактов')
+    surname = models.CharField(max_length=50, blank=True, null=True, db_comment='Фамилия', verbose_name='Фамилия')
+    name = models.CharField(max_length=50, blank=True, null=True, db_comment='Имя', verbose_name='Имя')
+    patronymic = models.CharField(max_length=50, blank=True, null=True, db_comment='Отчество', verbose_name='Отчество')
+    position = models.CharField(max_length=100, blank=True, null=True, db_comment='Должность', verbose_name='Должность')
+    phone = models.CharField(max_length=80, blank=True, null=True, db_comment='Телефон', verbose_name='Телефон')
+    mobiletelephone = models.CharField(max_length=80, blank=True, null=True, db_comment='МобТелефон', verbose_name='МобТелефон')
+    email = models.CharField(max_length=80, blank=True, null=True, db_comment='ЭлПочта', verbose_name='ЭлПочта')
+    unique_partner_identifier = models.CharField(max_length=200, blank=True, null=True, db_comment='УникальныйИдентификаторПартнера')
+    unique_contact_identifier = models.CharField(max_length=200, blank=True, null=True, db_comment='УникальныйИдентификаторКонтактногоЛица')
+    ok_desk_id = models.IntegerField(blank=True, null=True, db_comment='ИД в ОК ДЕСК')
+
+    class Meta:
+        managed = False
+        db_table = 'onec_contacts'
+        db_table_comment = 'Контакты'
+        verbose_name = '9_Контакт 1C'
+        verbose_name_plural = '9_Контакты 1C'

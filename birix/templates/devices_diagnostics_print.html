@@ -1,0 +1,465 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <title>Лист диагностики</title>
+    <style>
+        @media print {
+            @page {
+                size: A4;
+                margin: 10mm;
+            }
+            
+            body {
+                font-family: "Times New Roman", Times, serif;
+                font-size: 10pt;
+                line-height: 1.2;
+                margin: 0;
+                padding: 0;
+            }
+            
+            .no-print {
+                display: none !important;
+            }
+            
+            table {
+                width: 100%;
+                border-collapse: collapse;
+                border: 1px solid black;
+            }
+            
+            th, td {
+                border: 1px solid black;
+                padding: 4pt;
+                text-align: left;
+                vertical-align: top;
+            }
+            
+            th {
+                font-weight: bold;
+                background-color: #f0f0f0;
+            }
+            
+            .check-ok {
+                text-align: center;
+            }
+            
+            .check-fail {
+                text-align: center;
+            }
+            
+            .empty-row {
+                height: 4pt;
+            }
+            
+            .header {
+                text-align: center;
+                font-weight: bold;
+                font-size: 12pt;
+                margin-bottom: 8pt;
+                padding-bottom: 4pt;
+                border-bottom: 1px solid black;
+            }
+        }
+        
+        @media screen {
+            body {
+                font-family: Arial, sans-serif;
+                font-size: 12px;
+                max-width: 210mm;
+                margin: 20px auto;
+                padding: 20px;
+                background-color: #f5f5f5;
+            }
+            
+            .print-controls {
+                margin-bottom: 20px;
+                text-align: center;
+                padding: 15px;
+                background-color: white;
+                border-radius: 5px;
+                box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            }
+            
+            .btn-print {
+                padding: 10px 20px;
+                background-color: #4CAF50;
+                color: white;
+                border: none;
+                border-radius: 4px;
+                cursor: pointer;
+                font-size: 16px;
+            }
+            
+            .btn-close {
+                padding: 10px 20px;
+                background-color: #f44336;
+                color: white;
+                border: none;
+                border-radius: 4px;
+                cursor: pointer;
+                font-size: 16px;
+                margin-left: 10px;
+            }
+            
+            table {
+                width: 100%;
+                border-collapse: collapse;
+                background-color: white;
+                border: 1px solid #ddd;
+                margin-bottom: 20px;
+            }
+            
+            th, td {
+                border: 1px solid #ddd;
+                padding: 6px;
+                text-align: left;
+            }
+            
+            th {
+                background-color: #4CAF50;
+                color: white;
+                font-weight: bold;
+            }
+            
+            .header {
+                text-align: center;
+                font-weight: bold;
+                font-size: 18px;
+                margin-bottom: 15px;
+                padding-bottom: 10px;
+                border-bottom: 2px solid #4CAF50;
+            }
+        }
+        
+        .param-name {
+            width: 35%;
+            font-weight: bold;
+        }
+        
+        .param-value {
+            width: 50%;
+        }
+        
+        .param-status {
+            width: 15%;
+            text-align: center;
+        }
+        
+        .small-text {
+            font-size: 9pt;
+        }
+    </style>
+</head>
+<body>
+    <div class="no-print print-controls">
+        <button onclick="window.print()" class="btn-print">🖨 Печать</button>
+<button onclick="window.close()" class="btn-close">✕ Закрыть</button>
+    </div>
+    
+    <div class="header">ЛИСТ ДИАГНОСТИКИ</div>
+    
+    <table>
+        <thead>
+            <tr>
+                <th class="param-name">Параметр</th>
+                <th class="param-value">Значение/Комментарий</th>
+                <th class="param-status">Статус</th>
+            </tr>
+        </thead>
+        <tbody>
+            <!-- Основная информация - без заголовка -->
+            <tr>
+                <td>Терминал</td>
+                <td>
+                    {% if object.device %}
+                        {{ object.device.device_serial }}
+                    {% else %}
+                        -
+                    {% endif %}
+                </td>
+                <td></td>
+            </tr>
+            <tr>
+                <td>IMEI</td>
+                <td>
+                    {% if object.device and object.device.device_imei %}
+                        {{ object.device.device_imei }}
+                    {% else %}
+                        -
+                    {% endif %}
+                </td>
+                <td></td>
+            </tr>
+            <tr>
+                <td>Клиент</td>
+                <td>
+                    {% if object.device and object.device.contragent %}
+                        {{ object.device.contragent.ca_name }}
+                    {% else %}
+                        -
+                    {% endif %}
+                </td>
+                <td></td>
+            </tr>
+            <tr>
+                <td>Программист</td>
+                <td>
+                    {% if object.programmer.get_full_name %}
+                        {{ object.programmer.last_name }}
+                    {% else %}
+                        {{ object.programmer.last_name }}
+                    {% endif %}
+                </td>
+                <td></td>
+            </tr>
+            <tr>
+                <td>Принесён</td>
+                <td>{{ object.get_brought_display }}</td>
+                <td></td>
+            </tr>
+            
+            
+            <!-- Даты - без заголовка -->
+            <tr>
+                <td>Дата приёма</td>
+                <td>
+                    {% if object.accept_date %}
+                        {{ object.accept_date|date:"d.m.Y H:i" }}
+                    {% else %}
+                        -
+                    {% endif %}
+                </td>
+                <td></td>
+            </tr>
+            <tr>
+                <td>Дата передачи</td>
+                <td>
+                    {% if object.transfer_date %}
+                        {{ object.transfer_date|date:"d.m.Y H:i" }}
+                    {% else %}
+                        -
+                    {% endif %}
+                </td>
+                <td></td>
+            </tr>
+            
+            <!-- Диагностика -->
+            <tr>
+                <td>Подключение по USB</td>
+                <td>
+                    {% if object.USB_comment %}
+                        {{ object.USB_comment }}
+                    {% else %}
+                        -
+                    {% endif %}
+                </td>
+                <td class="check-ok">
+                    {% if object.USB_check %}✓{% else %}✗{% endif %}
+                </td>
+            </tr>
+            <tr>
+                <td>Основное питание</td>
+                <td>
+                    {% if object.PWR_comment %}
+                        {{ object.PWR_comment }}
+                    {% else %}
+                        -
+                    {% endif %}
+                </td>
+                <td class="check-ok">
+                    {% if object.PWR_check %}✓{% else %}✗{% endif %}
+                </td>
+            </tr>
+            <tr>
+                <td>Резервное питание</td>
+                <td>
+                    {% if object.PWR_AKB_comment %}
+                        {{ object.PWR_AKB_comment }}
+                    {% else %}
+                        -
+                    {% endif %}
+                </td>
+                <td class="check-ok">
+                    {% if object.PWR_AKB_check %}✓{% else %}✗{% endif %}
+                </td>
+            </tr>
+            <tr>
+                <td>Прошивка</td>
+                <td>
+                    {% if object.FIRMWARE_comment %}
+                        {{ object.FIRMWARE_comment }}
+                    {% else %}
+                        -
+                    {% endif %}
+                </td>
+                <td class="check-ok">
+                    {% if object.FIRMWARE_check %}✓{% else %}✗{% endif %}
+                </td>
+            </tr>
+            <tr>
+                <td>Наличие спутников</td>
+                <td>
+                    {% if object.SATS_comment %}
+                        {{ object.SATS_comment }}
+                    {% else %}
+                        -
+                    {% endif %}
+                </td>
+                <td class="check-ok">
+                    {% if object.SATS_check %}✓{% else %}✗{% endif %}
+                </td>
+            </tr>
+            <tr>
+                <td>Наличие GSM сигнала</td>
+                <td>
+                    {% if object.GSM_comment %}
+                        {{ object.GSM_comment }}
+                    {% else %}
+                        -
+                    {% endif %}
+                </td>
+                <td class="check-ok">
+                    {% if object.GSM_check %}✓{% else %}✗{% endif %}
+                </td>
+            </tr>
+            <tr>
+                <td>Терминал онлайн</td>
+                <td>
+                    {% if object.ONLINE_comment %}
+                        {{ object.ONLINE_comment }}
+                    {% else %}
+                        -
+                    {% endif %}
+                </td>
+                <td class="check-ok">
+                    {% if object.ONLINE_check %}✓{% else %}✗{% endif %}
+                </td>
+            </tr>
+            <tr>
+                <td>Порт 485</td>
+                <td>
+                    {% if object.P485_comment %}
+                        {{ object.P485_comment }}
+                    {% else %}
+                        -
+                    {% endif %}
+                </td>
+                <td class="check-ok">
+                    {% if object.P485_check %}✓{% else %}✗{% endif %}
+                </td>
+            </tr>
+            <tr>
+                <td>Цифровые входы</td>
+                <td>
+                    {% if object.DIGIT_PORT_comment %}
+                        {{ object.DIGIT_PORT_comment }}
+                    {% else %}
+                        -
+                    {% endif %}
+                </td>
+                <td class="check-ok">
+                    {% if object.DIGIT_PORT_check %}✓{% else %}✗{% endif %}
+                </td>
+            </tr>
+            <tr>
+                <td>Аналоговые входы</td>
+                <td>
+                    {% if object.ANALOG_PORT_comment %}
+                        {{ object.ANALOG_PORT_comment }}
+                    {% else %}
+                        -
+                    {% endif %}
+                </td>
+                <td class="check-ok">
+                    {% if object.ANALOG_PORT_check %}✓{% else %}✗{% endif %}
+                </td>
+            </tr>
+            
+            <!-- Комплектация -->
+            <tr>
+                <td>GSM антенна</td>
+                <td>
+                    {% if object.GSM_antenna_check %}
+                        В наличии
+                    {% else %}
+                        Отсутствует
+                    {% endif %}
+                </td>
+                <td class="check-ok">
+                    {% if object.GSM_antenna_check %}✓{% else %}✗{% endif %}
+                </td>
+            </tr>
+            <tr>
+                <td>GPS антенна</td>
+                <td>
+                    {% if object.GPS_antenna_check %}
+                    В наличии
+                    {% else %}
+                        Отсутствует
+                    {% endif %}
+                </td>
+                <td class="check-ok">
+                    {% if object.GPS_antenna_check %}✓{% else %}✗{% endif %}
+                </td>
+            </tr>
+            <tr>
+                <td>Разъем питания</td>
+                <td>
+                    {% if object.CABEL_check %}
+                        В наличии
+                    {% else %}
+                        Отсутствует
+                    {% endif %}
+                </td>
+                <td class="check-ok">
+                    {% if object.CABEL_check %}✓{% else %}✗{% endif %}
+                </td>
+            </tr>
+            <tr>
+                <td>SIM-карта</td>
+                <td>
+                    {% if object.SIM_comment %}
+                        {{ object.SIM_comment }}
+                    {% else %}
+                        Нет комментария
+                    {% endif %}
+                </td>
+                <td class="check-ok">
+                    {% if object.SIM_check %}✓{% else %}✗{% endif %}
+                </td>
+            </tr>
+            <tr>
+                <td><b>Заключение</b></td>
+                <td>
+                    {% if object.comment %}
+                        {{ object.comment }}
+                    {% else %}
+                        -
+                    {% endif %}
+                </td>
+                <td></td>
+            </tr>
+        </tbody>
+    </table>
+    
+    <div class="small-text no-print" style="margin-top: 20px; color: #666;">
+        <p>Дата формирования: {% now "d.m.Y H:i" %}</p>
+    </div>
+    
+    <script>
+        // Автоматическая печать при открытии (раскомментировать если нужно)
+        // window.onload = function() {
+        //     setTimeout(function() {
+        //         window.print();
+        //     }, 500);
+        // };
+        
+        document.addEventListener('keydown', function(e) {
+            if (e.key === 'Escape') {
+                window.close();
+            }
+        });
+    </script>
+</body>
+</html>

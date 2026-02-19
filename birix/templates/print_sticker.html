@@ -1,0 +1,89 @@
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Печать наклейки</title>
+    <style>
+        /* Стили для экрана */
+        .sticker {
+            width: 100%; /* Высота листа */
+            font-size: 30px;
+            text-align: left;
+            line-height: 1;
+        }
+        
+        /* Стили для печати */
+        @media print {
+            @page {
+                size: 32mm 22mm landscape; /* Установка альбомной ориентации */
+                margin: 2mm 0mm 0mm 0mm; /* Удаление стандартных полей */
+            }
+            
+            body {
+                margin: 0; /* Удаление полей тела документа */
+            }
+            
+            .sticker {
+                
+                width: 32mm; /* Ширина наклейки */
+                height: 22mm; /* Высота наклейки */
+                font-size: 11px;
+                text-align: left;
+                line-height: 1; /* Установка межстрочного интервала */
+                page-break-inside: avoid; /* Запрет разрыва страницы внутри наклейки */
+                box-sizing: border-box; /* Включение границ в размеры */
+                padding: 0mm; /* Добавление внутренних отступов */
+                overflow-wrap: break-word;
+                
+            }
+
+            .stiker p {
+                margin: 0;
+                padding: 0;
+                font-size: inherit;
+            }
+            
+            .container {
+                display: flex;
+                /*flex-wrap: wrap; /* Обертывание элементов в несколько строк */
+                /*justify-content: space-around; /* Распределение наклеек по ширине */
+                page-break-before: avoid;
+                page-break-after: avoid;
+            }
+            
+            #print-button {
+                display: none; /* Скрытие кнопки печати при выводе на печать */
+            }
+        }
+    </style>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.2.3/dist/css/bootstrap.min.css" rel="stylesheet" integrity="sha384-rbsA2VBKQhggwzxH7pPCaAqO46MgnOM80zW1RWuH61DGLwZJEdK2Kadq2F9CUG65" crossorigin="anonymous">
+</head>
+<body>
+    <div class="container">
+        <h1></h1>
+
+        {% for message in messages %}
+            <div class="message {% if message.tags %}{{ message.tags }}{% endif %}">
+                {{ message }}
+            </div>
+        {% endfor %}
+
+        
+
+        <div class="sticker" id="sticker-content">
+            <p>
+            {{ device_owner }}
+            {{ terminal_date|date:"d.m.Y" }}
+            {{ sys_mon }}
+            {{ itprogrammer }}
+            </p>
+        </div>
+        <button type="button" id="print-button">Печать</button>
+    </div>
+    <script>
+        document.getElementById('print-button').addEventListener('click', function() {
+            window.print();
+        });
+    </script>
+</body>
+</html>

@@ -1,9 +1,10 @@
+from time import sleep
 from django.core.paginator import EmptyPage, PageNotAnInteger, Paginator
-from django.shortcuts import get_object_or_404, render
+from django.shortcuts import get_object_or_404, render, redirect
 from django.views.generic.detail import DetailView
+import requests
 from birix.utils import get_accouns, get_history
-from datetime import datetime
-from django.contrib import admin
+from datetime import datetime, timedelta, date
 import birix.models as models
 from django.contrib.auth.decorators import login_required
 from django.views.generic.edit import UpdateView
@@ -12,13 +13,13 @@ from django.http import HttpResponse
 import pandas as pd
 from django.contrib.auth.decorators import user_passes_test
 from django.contrib.auth.mixins import LoginRequiredMixin
-from django.db.models import Count
 from django.contrib import messages
 import yadisk
 import os
-from birix.models import CaObjects
-from birix.forms import UploadFileForm
-from django.shortcuts import render
+from birix.models import CaObjects, Devices, GlobalLogging, DevicesDiagnostics
+from birix.forms import UploadFileForm, SmsForm
+from birix.sms_sender import MtsSender
+from django.urls import reverse
 
 
 @login_required
@@ -116,7 +117,7 @@ def not_present_accounts(request):
     ).all()
     results = []
     for i in not_present:
-        if i.contragent == None:
+        if not hasattr(i, 'contragent'):
             client = "Нет привязки к клиенту 1с"
         else:
             client = i.contragent.ca_name
@@ -290,7 +291,6 @@ def get_stock(request):
 
 
     sorted_terminals = sorted(terminals_count.items(), key=lambda x: x[1], reverse=True)
-
     sorted_sensors = sorted(sensors_count.items(), key=lambda x: x[1], reverse=True)
 
     return render(
@@ -305,41 +305,76 @@ def get_stock(request):
             }
             )
 
+def print_view(request, device_id):
+    device = get_object_or_404(Devices, pk=device_id)
+    cont_name = str(device.contragent)
+    context = {
+            'device_owner': cont_name.split('(')[0],
+            'terminal_date': device.terminal_date,
+            'sys_mon': device.sys_mon,
+            'itprogrammer': device.itprogrammer.id,
+            }
+    return render(request, 'print_sticker.html', context)
 
 @login_required
 def upload_file_view(request, object_id):
+    "Загрузка файла тарировки и создание заявок в Okdesk"
+    TOKEN = os.getenv('TOKEN_YANDEX') 
+    y = yadisk.YaDisk(token=TOKEN) 
+    ok_token = os.getenv('OK_TOKEN') 
+    ok_url = os.getenv('OK_URL')   
     ca_object = CaObjects.objects.get(id=object_id)
+    
     if request.method == 'POST':
         form = UploadFileForm(request.POST, request.FILES)
         if form.is_valid():
-            uploaded_file = request.FILES['file']
-            selected_date = form.cleaned_data['date']
-            formatted_date = selected_date.strftime('%d.%m.%Y')
-            file_name = f"{ca_object.object_name}_{formatted_date}"
-
-            # Upload the file to Yandex Disk
-            upload_result = upload_to_yandex_disk(request, uploaded_file, ca_object.owner_contragent, file_name)
-            
+            #Подготовка переменных
+            ca_object_contr_id = ca_object.contragent.ok_desk_id #ID контрагента в okdesk
+            ca_object_id = ca_object.ok_desk_id #ID объекта в okdesk
+            uploaded_file = request.FILES['file'] #Загружаемый файл тарировки
+            selected_date = form.cleaned_data['date'] #Дата тарировки
+            formatted_date = selected_date.strftime('%d.%m.%Y') #Читабельный формат даты
+            owner_name = str(ca_object.contragent).replace('/', '!') #Имя контрагента
+            file_name = f"{ca_object.object_name}_{formatted_date}.jpg".replace('/', '!') #Имя файла
+            service_man = ca_object.contragent.service_manager #Менеджер закрепленный за контрагентом
+            ya_link = f"https://disk.yandex.ru/client/disk/Автотарировки/{owner_name}?idApp=client&dialog=slider&idDialog=%2Fdisk%2FАвтотарировки%2F{owner_name}%2F{file_name}".replace(" ", "%20") #Ссылка на файл в Я.диске
+            # Загрузка файла на Яндекс диск
+            upload_result = upload_to_yandex_disk(y, request, uploaded_file, owner_name, file_name)
+            all_employ = get_all_employ(ok_url, ok_token)
+            employ = []
+            respon_employ = []
+            #Получение ID в okdesk ответственного за контрагента и ID вводившего тарировку менеджера
+            if all_employ:
+                employ = [empl["id"] for empl in all_employ if empl["last_name"] in request.user.last_name]
+                if service_man:
+                    respon_employ = [empl["id"] for empl in all_employ if empl["last_name"] in service_man]
+                if service_man == None or service_man == 'NULL':
+                    respon_employ = [empl["id"] for empl in all_employ if empl["last_name"] in "Пономарев"]
             if upload_result is True:
                 messages.success(request, "Файл успешно отправлен на диск")
+                #Создание основной заявки по успешному вводу тарировки
+                send_result = create_okdesk_ticket(request, ok_token, ok_url, ca_object, ca_object_contr_id, ca_object_id, ya_link, employ)
+                if send_result:
+                    #Закрытие основной заявки и создание вложенной, на контроль заявки серв. мен.
+                    change_status_issues(request, ok_token, ok_url, send_result["id"])
+                    create_child_okdesk_ticket(request, ok_token, ok_url, send_result["id"], ca_object_contr_id, respon_employ, ca_object_id)
+                    messages.success(request, "Заявка успешно создана в OkDesk")
+                else:
+                    messages.error(request, "Ошибка при создании заявки")
             else:
-                messages.error(request, upload_result)  # Display the error message returned from the function
+                messages.error(request, upload_result)
         else:
             messages.error(request, "Ошибка валидации формы. Пожалуйста, проверьте введенные данные.")
     else:
         form = UploadFileForm(initial={'object_name': ca_object.object_name})
-
     return render(request, 'upload.html', {'form': form})
 
-def upload_to_yandex_disk(request, uploaded_file, owner_contragent, file_name):
-    TOKEN = os.getenv('TOKEN_YANDEX')
-    y = yadisk.YaDisk(token=TOKEN)
+def upload_to_yandex_disk(y, request, uploaded_file, owner_contragent, file_name):
+    "MKDIR в папку контрагента и отправка файла (y - Token, uploaded_file - загружаемый файл, owner_contragent - хозяин объекта как в 1С, file_name - имя объекта)"
 
     if not y.check_token():
         return "Токен недействителен."
-
     folder_path = f"/Автотарировки/{owner_contragent}"
-
     try:
         if not y.is_dir(folder_path):
             y.mkdir(folder_path)  # Create folder if it doesn't exist
@@ -347,13 +382,250 @@ def upload_to_yandex_disk(request, uploaded_file, owner_contragent, file_name):
         else:
             messages.info(request, f'Папка "{folder_path}" уже существует.')
 
-        yandex_disk_path = f"{folder_path}/{file_name}.png"
+        yandex_disk_path = f"{folder_path}/{file_name}"
 
         # Upload the file to Yandex Disk
         with uploaded_file.open('rb') as f:
             y.upload(f, yandex_disk_path)
 
     except Exception as e:
-        return f"Ошибка при работе с Яндекс Диском: {e}"
-    
+        return f"Ошибка: {e}"
     return True
+
+def create_okdesk_ticket(request, ok_token, ok_url, object_name, owner, object_id, ya_link, employ):
+    "отправка post запроса на создание заявки (ok_token - Токен okdesk, ok_url - Ссылка на okdesk, object_name - имяобъекта, owner - ID контрагента в okdesk, object_id - ID объекта в okdesk, ya_link - Ссылка на файл тарировки в Яндекс, employ - ID вводившего тарировку)"
+
+    url=f"{ok_url}v1/issues/?api_token={ok_token}"
+
+    data = {
+            "title": f"Новая тарировка - {object_name}",
+            "description": f"Новая тарировка объекта. Ссылка: {ya_link}",
+            "company_id": owner,
+            "assignee_id": str(employ[0]),
+            "maintenance_entity_id": object_id,
+            "type": "vvod_tarir",
+            "custom_parameters":{"ts_quantity":"1","labor_intensity":"2"}
+            }
+    try:
+        response = requests.post(url, json = data)
+        if response.status_code == 200:
+            return response.json()
+        else:
+            messages.error(request, f"Ошибка при создании заявки: {response.text}")
+    except Exception as e:
+            messages.error(request, f"Ошибка при работе с OkDesk API: {e} --- {data}")
+
+def change_status_issues(request, ok_token, ok_url, ok_issues_id):
+    "Закрытие основной заявки в Okdesk (ok_token - Токен okdesk, ok_url - Ссылка на okdesk, ok_issues_id - id основной заявки на ввод тарировки)"
+    url = f"{ok_url}/v1/issues/{ok_issues_id}/statuses?api_token={ok_token}"
+    data = {
+            "code":"tar_complete",
+            "comment":"Заявка создана автоматически с помощью робота",
+            }
+    
+    response = requests.post(url, json=data)
+    if response.status_code == 200:
+        return response.json()
+    else:
+        messages.error(request, f"Не сохранились данные {response.status_code} {response.text} {data}")
+
+def create_child_okdesk_ticket(request, ok_token, ok_url, ok_issues_id, owner, employ, object_id):
+    "Создание вложенной заявки на контроль работы датчика в Okdesk (ok_token - Токен okdesk, ok_url - Ссылка на okdesk, ok_issues_id - ID основной заявки на ввод тарировки, owner - ID контрагента в okdesk, employ - ID специалиста ответственного за контрагента, object_id - ID объекта в okdesk)"
+    url=f"{ok_url}v1/issues/?api_token={ok_token}"
+    data = {
+            "title": f"Контроль работы доп. оборудования",
+            "description": f"Проконтролировать работу установленного ДУТа.",
+            "company_id": owner,
+            "deadline_at": str(date.today() + timedelta(days=14)) + " 17:30",
+            "assignee_id": str(employ[0]),
+            "maintenance_entity_id": object_id,
+            "type": "vn_control_dop_obor",
+            "custom_parameters":{"ts_quantity":"1","labor_intensity":"2"},
+            "parent_id": ok_issues_id,
+            }
+    
+    response = requests.post(url, json=data)
+    if response.status_code == 200:
+        return response.json()
+    else:
+        messages.error(request, f"Не сохранились данные {response.status_code} {response.text} {data}")
+
+
+def __get_request(url):
+        """Универсальный метод для выполнения GET-запросов"""
+        response = requests.get(url)
+        if response.status_code == 200:
+            return response.json()
+        else:
+            response = requests.get(url)
+            if response.status_code == 200:
+                return response.json()
+            else:
+                return None
+
+def get_all_employ(ok_url, ok_token):
+    return __get_request(f"{ok_url}v1/employees/list?api_token={ok_token}")
+
+
+
+from django.utils import timezone
+
+def send_sms(request):
+    results = []
+    if request.method == 'POST':
+        form = SmsForm(request.POST)
+        if form.is_valid():
+            phone_numbers = form.cleaned_data['phone_numbers']
+            message = form.cleaned_data['message']
+            for number in phone_numbers:
+                sleep(2)
+                sender = MtsSender()
+                success, detail = sender.send_message(number, message)
+                results.append({
+                    'number': number,
+                    'success': success,
+                    'detail': detail
+                })
+                
+                # Логирование действия
+                GlobalLogging.objects.create(
+                    section_type='SMS',
+                    edit_id=request.user.id if request.user.is_authenticated else 0,
+                    field='phone_number',
+                    old_value=number,
+                    new_value=message[:255],  # Обрезаем сообщение до 255 символов
+                    change_time=timezone.now(),
+                    sys_id=GlobalLogging.SysChoices.null,
+                    action=GlobalLogging.ActionChoices.create
+                )
+    else:
+        form = SmsForm()
+    
+    return render(request, 'send_sms.html', {
+        'form': form,
+        'results': results
+    })
+
+
+import urllib.parse
+import re
+
+@login_required
+def check_yandex_files(request, object_id):
+    """Проверка существования файлов на Яндекс.Диске"""
+    TOKEN = os.getenv('TOKEN_YANDEX')
+    y = yadisk.YaDisk(token=TOKEN)
+    try:
+        ca_object = get_object_or_404(CaObjects, id=object_id)
+        owner_contragent = str(ca_object.contragent).replace('/', '!')
+        folder_path = f"/Автотарировки/{owner_contragent}"
+        
+        files = []
+        if y.is_dir(folder_path):
+            for item in y.listdir(folder_path):
+                if item.name.startswith(ca_object.object_name.replace('/', '!')):
+                    # Правильное формирование ссылки
+                    encoded_folder = urllib.parse.quote(f"Автотарировки/{owner_contragent}")
+                    encoded_file = urllib.parse.quote(item.name)
+                    
+                    web_link = (
+                        f"https://disk.yandex.ru/client/disk/{encoded_folder}"
+                        f"?idApp=client&dialog=slider"
+                        f"&idDialog=%2Fdisk%2F{encoded_folder}%2F{encoded_file}"
+                    )
+                    
+                    files.append({
+                        'name': item.name,
+                        'url': web_link,
+                        'size': item.size,
+                        'modified': item.modified
+                    })
+
+        
+        if not files:
+            messages.info(request, "Файлы не найдены на Яндекс.Диске")
+            return redirect('admin:birix_caobjects_changelist')
+        
+        return render(request, 'yandex_files.html', {
+            'files': files,
+            'object': ca_object
+        })
+            
+    except Exception as e:
+        messages.error(request, f"Ошибка: {str(e)}")
+        return redirect('admin:birix_caobjects_changelist')
+
+from django.shortcuts import render, get_object_or_404
+from django.contrib.auth.decorators import login_required
+from .models import DevicesDiagnostics
+
+@login_required
+def print_diagnostic(request, diagnostic_id):
+    """View для отображения печатной версии диагностики"""
+    obj = get_object_or_404(DevicesDiagnostics, id=diagnostic_id)
+    
+    # Проверка прав доступа
+    if not request.user.is_staff:
+        return render(request, '403.html', status=403)
+    
+    # Подготовка данных для таблицы
+    diagnostic_data = []
+    
+    # Основная информация
+    diagnostic_data.append(('Основная информация', '', ''))
+    diagnostic_data.append(('Терминал', str(obj.device), ''))
+    diagnostic_data.append(('Серийный номер', obj.device.device_serial if obj.device else '-', ''))
+    diagnostic_data.append(('IMEI', obj.device.device_imei if obj.device and obj.device.device_imei else '-', ''))
+    diagnostic_data.append(('Клиент', obj.device.contragent.ca_name if obj.device and obj.device.contragent else '-', ''))
+    diagnostic_data.append(('Программист', str(obj.programmer.last_name), ''))
+    diagnostic_data.append(('Принесён', obj.get_brought_display(), ''))
+    diagnostic_data.append(('Заключение', obj.comment or '-', ''))
+    
+    # Даты
+    diagnostic_data.append(('', '', ''))
+    diagnostic_data.append(('Даты', '', ''))
+    diagnostic_data.append(('Дата приёма', obj.accept_date.strftime('%d.%m.%Y %H:%M') if obj.accept_date else '-', ''))
+    diagnostic_data.append(('Дата передачи', obj.transfer_date.strftime('%d.%m.%Y %H:%M') if obj.transfer_date else '-', ''))
+    
+    # Диагностика
+    diagnostic_data.append(('', '', ''))
+    diagnostic_data.append(('Диагностика', '', ''))
+    
+    check_fields = [
+        ('USB_check', 'USB_comment', 'Подключение по USB'),
+        ('PWR_check', 'PWR_comment', 'Основное питание'),
+        ('PWR_AKB_check', 'PWR_AKB_comment', 'Резервное питание'),
+        ('FIRMWARE_check', 'FIRMWARE_comment', 'Прошивка'),
+        ('SATS_check', 'SATS_comment', 'Наличие спутников'),
+        ('GSM_check', 'GSM_comment', 'Наличие GSM сигнала'),
+        ('ONLINE_check', 'ONLINE_comment', 'Терминал онлайн'),
+        ('P485_check', 'P485_comment', 'Порт 485'),
+        ('DIGIT_PORT_check', 'DIGIT_PORT_comment', 'Цифровые входы'),
+        ('ANALOG_PORT_check', 'ANALOG_PORT_comment', 'Аналоговые входы'),
+    ]
+    
+    for check_field, comment_field, label in check_fields:
+        check_value = '✓' if getattr(obj, check_field) else '✗'
+        comment_value = getattr(obj, comment_field) or '-'
+        diagnostic_data.append((label, comment_value, check_value))
+    
+    # Комплектация
+    diagnostic_data.append(('', '', ''))
+    diagnostic_data.append(('Комплектация', '', ''))
+    diagnostic_data.append(('GSM антенна', '✓' if obj.GSM_antenna_check else '✗', ''))
+    diagnostic_data.append(('GPS антенна', '✓' if obj.GPS_antenna_check else '✗', ''))
+    diagnostic_data.append(('Разъем питания', '✓' if obj.CABEL_check else '✗', ''))
+    diagnostic_data.append(('SIM-карта', obj.SIM_comment or '-', '✓' if obj.SIM_check else '✗'))
+    
+    # Передача
+    diagnostic_data.append(('', '', ''))
+    diagnostic_data.append(('Передача устройства', '', ''))
+    diagnostic_data.append(('Куда отдан', obj.get_whom_tranfer_display() if obj.whom_tranfer else '-', ''))
+    
+    context = {
+        'title': f'Акт диагностики терминала {obj.device.device_serial if obj.device else "N/A"}',
+        'object': obj,
+        'diagnostic_data': diagnostic_data,
+    }
+    
+    return render(request, 'devices_diagnostics_print.html', context)

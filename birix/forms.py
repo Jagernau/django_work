@@ -38,3 +38,28 @@ class UploadFileForm(forms.Form):
         super().__init__(*args, **kwargs)
         if 'object_name' in kwargs:
             self.fields['object_name'].initial = kwargs.pop('object_name')  # Устанавливаем начальное значение
+
+
+import re
+
+class SmsForm(forms.Form):
+    phone_numbers = forms.CharField(
+        label='Номера телефонов',
+        widget=forms.Textarea,
+        help_text='Номера через запятую\nCтрого 79040000000'
+    )
+    message = forms.CharField(
+        label='Сообщение',
+        widget=forms.Textarea
+    )
+
+    def clean_phone_numbers(self):
+        data = self.cleaned_data['phone_numbers']
+        # Разделение номеров по запятым, пробелам или переносам строк
+        numbers = re.split(r'[, \n]+', data)
+        # Очистка и проверка номеров
+        cleaned_numbers = [num.strip() for num in numbers if num.strip()]
+        if not cleaned_numbers:
+            raise forms.ValidationError('Введите хотя бы один номер телефона.')
+        return cleaned_numbers
+
