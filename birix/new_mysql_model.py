@@ -43,6 +43,7 @@ class Contragents(models.Model):
     service_manager = models.CharField(max_length=100, blank=True, null=True, db_comment='Имя прикреплённого менеджера тех поддержки')
     ok_desk_id = models.IntegerField(blank=True, null=True, db_comment='id в ОК деске')
     ca_tarif = models.CharField(max_length=20, blank=True, null=True, db_comment='Тариф Клиента')
+    customer_training = models.IntegerField(blank=True, null=True, db_comment='Обучен ли клиент по Сервисам.')
 
     class Meta:
         managed = False
@@ -62,6 +63,7 @@ class LoginUsers(models.Model):
     ca_uid = models.CharField(max_length=100, blank=True, null=True, db_comment='Уникальный id контрагента')
     account_status = models.IntegerField(db_comment='Состояние учётки 0-остановлена, 1-не подтверждена но активна, 2-подтверждена и активна 3 -тестовая\r\n4- Учётка для учёта ТС\r\n\r\n')
     is_billing = models.IntegerField(blank=True, null=True, db_comment='Билинговый ли аккаунт\r\n0-не Билинговый\r\n1 - Билинговый')
+    onec_contracts_id = models.IntegerField(blank=True, null=True, db_comment='ID договора')
 
     class Meta:
         managed = False
@@ -208,22 +210,22 @@ class AuthUserUserPermissions(models.Model):
 
 class Billing(models.Model):
     bil_id = models.AutoField(primary_key=True, db_comment='ID билинга')
-    sys_mon = models.ForeignKey('MonitoringSystem', models.DO_NOTHING, db_comment='ID системы мониторинга')
+    sys_mon_id = models.IntegerField(db_comment='ID системы мониторинга')
     sys_mon_price = models.IntegerField(db_comment='Стоимость СМ для КЛ')
-    retrans = models.ForeignKey('ObjectRetranslators', models.DO_NOTHING, blank=True, null=True, db_comment='ID ретрансляции')
+    retrans_id = models.IntegerField(blank=True, null=True, db_comment='ID ретрансляции')
     retrans_name = models.CharField(max_length=50, blank=True, null=True, db_comment='Название ретрансляции')
     retrans_price = models.IntegerField(blank=True, null=True, db_comment='Цена ретрансляции')
-    obj = models.ForeignKey('CaObjects', models.DO_NOTHING, db_comment='ID объекта в БД')
+    obj_id = models.IntegerField(db_comment='ID объекта в БД')
     obj_name = models.CharField(max_length=100, db_comment='Название объекта')
-    sim = models.ForeignKey('SimCards', models.DO_NOTHING, blank=True, null=True, db_comment='ID СИМКАРТЫ')
+    sim_id = models.IntegerField(blank=True, null=True, db_comment='ID СИМКАРТЫ')
     sim_operat_name = models.CharField(max_length=50, blank=True, null=True, db_comment='Имя оператора')
     sim_price = models.IntegerField(blank=True, null=True, db_comment='Цена сим для КЛ')
-    client = models.ForeignKey(Contragents, models.DO_NOTHING, blank=True, null=True, db_comment='ID клиента')
+    client_id = models.IntegerField(blank=True, null=True, db_comment='ID клиента')
     client_name = models.CharField(max_length=300, blank=True, null=True, db_comment='Имя клиента')
     client_inn = models.CharField(max_length=200, blank=True, null=True, db_comment='ИНН Клиента')
     discount_client = models.JSONField(blank=True, null=True, db_comment="СКИДКИ КЛИЕНТА\r\n[{'dis_id': 1, 'dis_name': 'Лояльность'},\r\n {'dis_id': 2, 'dis_name': 'Кол-во объектов > 50'},\r\n]")
     discount_client_rate = models.IntegerField(blank=True, null=True, db_comment='Итоговый процент Скидки')
-    obj_status = models.ForeignKey('ObjectStatuses', models.DO_NOTHING, db_comment='ID статуса объекта')
+    obj_status_id = models.IntegerField(db_comment='ID статуса объекта')
     discount_obj = models.JSONField(blank=True, null=True, db_comment="СКИДКИ КЛИЕНТА [{'dis_id': 1, 'dis_name': 'Лояльность'}, {'dis_id': 2, 'dis_name': 'Дружественный'}, ]")
     discount_obj_rate = models.IntegerField(blank=True, null=True, db_comment='Процент скидок на объект')
     record_time = models.DateTimeField(db_comment='Время создания записи')
@@ -390,6 +392,7 @@ class DevicesDiagnostics(models.Model):
     digit_port_comment = models.CharField(db_column='DIGIT_PORT_comment', max_length=60, blank=True, null=True, db_comment='Комментарий к проверке цифровых портов')  # Field name made lowercase.
     analog_port_comment = models.CharField(db_column='ANALOG_PORT_comment', max_length=60, blank=True, null=True, db_comment='Комментарий к проверке аналоговых портов')  # Field name made lowercase.
     sim_comment = models.CharField(db_column='SIM_comment', max_length=60, blank=True, null=True, db_comment='Комментарий к SIM карте')  # Field name made lowercase.
+    sim_iccid = models.CharField(db_column='Sim_iccid', max_length=30, blank=True, null=True)  # Field name made lowercase.
 
     class Meta:
         managed = False
@@ -422,7 +425,7 @@ class DevicesVendor(models.Model):
 class DiscountClient(models.Model):
     dis_cl_id = models.AutoField(primary_key=True, db_comment='ID Скидки')
     dis_cl_name = models.CharField(max_length=100, db_comment='Название Скидки')
-    dis_cl_rate = models.IntegerField(db_comment='Процент')
+    dis_cl_rate = models.DecimalField(max_digits=10, decimal_places=2, db_comment='Скидка Надбавка')
 
     class Meta:
         managed = False
@@ -617,6 +620,7 @@ class InfoServObj(models.Model):
     sys_password = models.CharField(max_length=100, db_comment='Пароль пользователя от СМ')
     send_meth = models.IntegerField(blank=True, null=True, db_comment='Способ отправки 0 - ОКДЕСК\r\n1 - MAIL')
     grouping_sign = models.IntegerField(db_comment='Есть ли группировка')
+    testing_status = models.IntegerField(blank=True, null=True, db_comment='0 - ТЕСТ\r\n1 - Абонентка')
 
     class Meta:
         managed = False
@@ -734,6 +738,17 @@ class MonitoringSystem(models.Model):
         managed = False
         db_table = 'monitoring_system'
         db_table_comment = 'Таблица для хранения информации о системах мониторинга'
+
+
+class NdsTable(models.Model):
+    nds_id = models.AutoField(primary_key=True)
+    nds_suntel_name = models.CharField(max_length=100, db_comment='Принадлежность к подразделению Сантел')
+    nds_rate = models.IntegerField(db_comment='Процент НДС в числовом')
+    nds_create_date = models.DateTimeField(db_comment='Дата создания НДС')
+
+    class Meta:
+        managed = False
+        db_table = 'nds_table'
 
 
 class ObjectRetranslators(models.Model):
@@ -894,6 +909,7 @@ class ReprogTerms(models.Model):
     send_type = models.CharField(max_length=200, blank=True, null=True, db_comment='Тип через что была отправка')
     monitoring_system = models.IntegerField(blank=True, null=True, db_comment='Система мониторинга')
     full_device_name = models.CharField(max_length=200, blank=True, null=True, db_comment='Полное название типа терминала')
+    data_reprog = models.DateTimeField(blank=True, null=True, db_comment='Дата репрог')
 
     class Meta:
         managed = False
@@ -1004,6 +1020,35 @@ class SimCards(models.Model):
     class Meta:
         managed = False
         db_table = 'sim_cards'
+
+
+class SmsReply(models.Model):
+    reply_id = models.AutoField(primary_key=True)
+    text_data = models.CharField(max_length=300, blank=True, null=True, db_comment='Ответ')
+    naming = models.CharField(max_length=100, db_comment='От кого отправлен запрос')
+    user_contact = models.CharField(max_length=100, db_comment='На какой телефон отправлен запрос')
+    received_at = models.CharField(max_length=100, blank=True, null=True, db_comment='получено по адресу')
+    internal_id = models.CharField(max_length=300, db_comment='ID Отправки')
+    created_reply_time = models.DateTimeField(db_comment='Время создания записи')
+
+    class Meta:
+        managed = False
+        db_table = 'sms_reply'
+        db_table_comment = 'Ответы от СМС'
+
+
+class SmsSending(models.Model):
+    sending_id = models.AutoField(primary_key=True)
+    request_data = models.CharField(max_length=300, db_comment='Запрос')
+    naming = models.CharField(max_length=100, db_comment='От кого отправлен запрос')
+    user_contact = models.CharField(max_length=100, db_comment='На какой телефон отправлен запрос')
+    internal_id = models.CharField(max_length=300, blank=True, null=True, db_comment='Уникальный ИД заявки')
+    created_send_time = models.DateTimeField(db_comment='Время создании записи')
+
+    class Meta:
+        managed = False
+        db_table = 'sms_sending'
+        db_table_comment = 'Таблица отправленных СМС'
 
 
 class TransferClient(models.Model):

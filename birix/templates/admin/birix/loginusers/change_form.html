@@ -1,0 +1,42 @@
+{% extends "admin/change_form.html" %}
+{% load static %}
+
+{% block admin_change_form_document_ready %}
+{{ block.super }}
+<script type="text/javascript">
+(function($) {
+    $(document).ready(function() {
+        var $contragent = $('#id_contragent');
+        var $contract = $('#id_contract');
+
+        function updateContracts() {
+            var contragentId = $contragent.val();
+            if (contragentId) {
+                $.ajax({
+                    url: '{% url "admin:get_contracts" %}',
+                    data: {
+                        contragent_id: contragentId
+                    },
+                    success: function(data) {
+                        $contract.empty();
+                        $contract.append($('<option>', { value: '', text: '---------' }));
+                        $.each(data, function(i, item) {
+                            $contract.append($('<option>', { value: item.id, text: item.text }));
+                        });
+                    }
+                });
+            } else {
+                $contract.empty();
+                $contract.append($('<option>', { value: '', text: '---------' }));
+            }
+        }
+
+        $contragent.change(updateContracts);
+        // При загрузке страницы, если контрагент уже выбран (редактирование), подгружаем договоры
+        if ($contragent.val()) {
+            updateContracts();
+        }
+    });
+})(django.jQuery);
+</script>
+{% endblock %}

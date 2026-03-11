@@ -85,8 +85,60 @@ class ContragentsAdmin(LoginRequiredMixin, admin.ModelAdmin):
             return response
 
 
+class LoginUsersForm(forms.ModelForm):
+    contract = forms.ModelChoiceField(
+        queryset=OnecContracts.objects.none(),
+        required=False,
+        label='Договор',
+        help_text='Выберите договор, относящийся к контрагенту'
+    )
+
+    class Meta:
+        model = LoginUsers
+        fields = '__all__'
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields['contract'].label_from_instance = lambda obj: f"{obj.name_contract} ({obj.contract_number})"
+
+        # Определяем контрагента: из instance или из POST-данных
+        contragent = None
+        if self.instance and self.instance.contragent_id:
+            contragent = self.instance.contragent
+        elif self.data and self.data.get('contragent'):
+            try:
+                contragent = Contragents.objects.get(pk=self.data.get('contragent'))
+            except (Contragents.DoesNotExist, ValueError):
+                pass
+
+        # Устанавливаем queryset договоров
+        if contragent and contragent.unique_onec_id:
+            self.fields['contract'].queryset = OnecContracts.objects.filter(
+                unique_partner_identifier=contragent.unique_onec_id
+            )
+        else:
+            self.fields['contract'].queryset = OnecContracts.objects.none()
+
+        # Устанавливаем начальное значение для редактирования
+        if self.instance and self.instance.onec_contracts_id:
+            try:
+                self.fields['contract'].initial = OnecContracts.objects.get(pk=self.instance.onec_contracts_id)
+            except OnecContracts.DoesNotExist:
+                pass
+
+    def save(self, commit=True):
+        instance = super().save(commit=False)
+        contract = self.cleaned_data.get('contract')
+        instance.onec_contracts_id = contract.pk if contract else None
+        if commit:
+            instance.save()
+            self.save_m2m()
+        return instance
+
 
 class LoginUsersAdmin(LoginRequiredMixin,admin.ModelAdmin):
+
+    form = LoginUsersForm  # <-- добавить эту строку
 
     actions = ['download_excel', 'send_access_mail_manager', 'send_access_mail_client']
 
@@ -96,6 +148,7 @@ class LoginUsersAdmin(LoginRequiredMixin,admin.ModelAdmin):
             "date_create",
             "system",
             "contragent",
+            "get_contract_display",
             "comment_field",
             "account_status",
             'is_billing',
@@ -128,6 +181,7 @@ class LoginUsersAdmin(LoginRequiredMixin,admin.ModelAdmin):
                     'date_create',
                     'system',
                     'contragent',
+                    'contract',
                     'comment_field',
                     'account_status',
                     'is_billing',
@@ -145,6 +199,7 @@ class LoginUsersAdmin(LoginRequiredMixin,admin.ModelAdmin):
                     'date_create',
                     'system',
                     'contragent',
+                    'contract',
                     'comment_field',
                     'account_status',
                     'is_billing',
@@ -153,6 +208,17 @@ class LoginUsersAdmin(LoginRequiredMixin,admin.ModelAdmin):
     )
     autocomplete_fields = ('contragent',)
     list_per_page = 20
+
+
+    def get_contract_display(self, obj):
+        if obj.onec_contracts_id:
+            try:
+                contract = OnecContracts.objects.get(pk=obj.onec_contracts_id)
+                return f"{contract.name_contract} ({contract.contract_number})"
+            except OnecContracts.DoesNotExist:
+                return '-'
+        return '-'
+    get_contract_display.short_description = 'Договор'
 
 # Отправка сообщений с данными для входа по чекбоксам
     def send_access_mail_manager(self, request, queryset):
@@ -247,6 +313,35 @@ class LoginUsersAdmin(LoginRequiredMixin,admin.ModelAdmin):
 
     get_by_manager.short_description = 'Менеджер по продажам'
     get_it_manager.short_description = 'ИТ специалист'
+
+
+    def get_urls(self):
+        urls = super().get_urls()
+        custom_urls = [
+            path('ajax/get_contracts/',
+                 self.admin_site.admin_view(self.get_contracts_ajax),
+                 name='get_contracts'),
+        ]
+        return custom_urls + urls
+
+    def get_contracts_ajax(self, request):
+        contragent_id = request.GET.get('contragent_id')
+        if not contragent_id:
+            return JsonResponse([], safe=False)
+        try:
+            contragent = Contragents.objects.get(pk=contragent_id)
+        except Contragents.DoesNotExist:
+            return JsonResponse([], safe=False)
+
+        contracts = OnecContracts.objects.filter(
+            unique_partner_identifier=contragent.unique_onec_id
+        )
+        data = [
+            {'id': c.pk, 'text': f"{c.name_contract} ({c.contract_number})"}
+            for c in contracts
+        ]
+        return JsonResponse(data, safe=False)
+
 
 
 class AdditionalStatusFilter(admin.SimpleListFilter):
@@ -1004,6 +1099,52 @@ class DevicesAdmin(LoginRequiredMixin,admin.ModelAdmin):
             # Write workbook to response
             workbook.save(response)
             return response
+
+
+    def save_model(self, request, obj, form, change):
+        super().save_model(request, obj, form, change)
+        # Если запись создаётся (не изменение) и система мониторинга = bestelectronics (ID 13)
+        if not change and obj.sys_mon_id == 13 or obj.sys_mon_id == 20:
+            self.create_okdesk_ticket_for_bestelectronics(request, obj)
+
+    def create_okdesk_ticket_for_bestelectronics(self, request, device):
+        try:
+            contragent = device.contragent
+            if not contragent:
+                messages.error(request, "У терминала не указан контрагент. Заявка не создана.")
+                return
+            ok_client_id = contragent.ok_desk_id
+            if not ok_client_id:
+                messages.error(request, "У контрагента не указан ID в Okdesk. Заявка не создана.")
+                return
+
+            employ = request.user.last_name
+            title = f"Регистрация терминала {device.device_serial} Видеорегистратора"
+            description = (
+                f"Терминал {device.device_serial} (IMEI: {device.device_imei}) "
+                f"для клиента {contragent.ca_name} запрограммирован. "
+                f"Требуется регистрация в системе Fort для начисления абон для СИМ видеорегов."
+            )
+            # Уточните корректный тип заявки в вашей системе Okdesk
+            type_req = "prog_at"
+
+            # Импортируем функцию для создания заявки (см. следующий шаг)
+            from birix.okdesk_funcs import create_okdesk_ticket_for_company
+            result, success = create_okdesk_ticket_for_company(
+                company_id=ok_client_id,
+                title=title,
+                description=description,
+                assignee_last_name=employ,
+                type_req=type_req
+            )
+            if success:
+                messages.success(request, result)
+            else:
+                messages.error(request, result)
+        except Exception as e:
+            messages.error(request, f"Ошибка при создании заявки для bestelectronics: {e}")
+
+
 
 class DeviceBrandsAdmin(LoginRequiredMixin,admin.ModelAdmin):
     list_display = (

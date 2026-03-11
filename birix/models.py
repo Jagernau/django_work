@@ -243,6 +243,7 @@ class LoginUsers(models.Model):
             choices=BillingChoices.choices,
             default=BillingChoices.in_billing
             )
+    onec_contracts_id = models.IntegerField(blank=True, null=True, db_comment='ID договора')
 
 
     def clean(self):

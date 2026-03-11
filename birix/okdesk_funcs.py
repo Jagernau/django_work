@@ -48,3 +48,32 @@ def create_okdesk_ticket(object_name,
             return (f"Ошибка при создании заявки: {response.text}", False)
     except Exception as e:
             return (f"Ошибка при работе с OkDesk API: {e} --- {data}", False)
+
+
+def create_okdesk_ticket_for_company(company_id, title, description, assignee_last_name, type_req):
+    """
+    Создание заявки в Okdesk для компании (без привязки к объекту).
+    Возвращает кортеж (сообщение, успех).
+    """
+    all_empl = get_all_employ()
+    concrete_empl = [empl["id"] for empl in all_empl if empl["last_name"] == assignee_last_name]
+    if not concrete_empl:
+        return (f"Не найден сотрудник с фамилией {assignee_last_name} в Okdesk.", False)
+
+    url = f"{os.getenv('OK_URL')}v1/issues/?api_token={os.getenv('OK_TOKEN')}"
+    data = {
+        "title": title,
+        "description": description,
+        "company_id": company_id,
+        "assignee_id": str(concrete_empl[0]),
+        "type": type_req,
+        "custom_parameters": {"ts_quantity": "1", "labor_intensity": "2"}
+    }
+    try:
+        response = requests.post(url, json=data)
+        if response.status_code == 200:
+            return ("Заявка успешно создана в Okdesk.", True)
+        else:
+            return (f"Ошибка при создании заявки: {response.text}", False)
+    except Exception as e:
+        return (f"Ошибка при работе с OkDesk API: {e}", False)
