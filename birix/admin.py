@@ -154,16 +154,20 @@ class LoginUsersAdmin(LoginRequiredMixin,admin.ModelAdmin):
             'is_billing',
             "get_by_manager",
             "get_it_manager",
+            "last_entry",
+            'login_enabling',
             )
 
     list_filter = (
             ('date_create', DateRangeFilter),
+            ('last_entry', DateRangeFilter),
             "system",
             "date_create",
             "contragent__service_manager",
             "contragent__key_manager",
             "account_status",
             'is_billing',
+            'login_enabling',
             )
     search_fields = (
             "client_name",
@@ -275,7 +279,7 @@ class LoginUsersAdmin(LoginRequiredMixin,admin.ModelAdmin):
             worksheet.title = "LoginUsers Data"
 
             # Write headers
-            header_row = ["login", "email", "password", "date_create", "system", "contragent", "comment_field", "account_status"]
+            header_row = ["login", "email", "password", "date_create", "system", "contragent", "comment_field", "account_status", 'last_entry', 'login_enabling']
             for col_num, header in enumerate(header_row, 1):
                 worksheet.cell(row=1, column=col_num).value = header
 
@@ -290,6 +294,8 @@ class LoginUsersAdmin(LoginRequiredMixin,admin.ModelAdmin):
                 worksheet.cell(row=row_num, column=6).value = str(loginuser.contragent)
                 worksheet.cell(row=row_num, column=7).value = str(loginuser.comment_field)
                 worksheet.cell(row=row_num, column=8).value = str(loginuser.account_status)
+                worksheet.cell(row=row_num, column=9).value = str(loginuser.last_entry)
+                worksheet.cell(row=row_num, column=10).value = str(loginuser.login_enabling)
                 row_num += 1
 
             # Set content type and attachment filename

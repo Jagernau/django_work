@@ -64,6 +64,9 @@ class LoginUsers(models.Model):
     account_status = models.IntegerField(db_comment='Состояние учётки 0-остановлена, 1-не подтверждена но активна, 2-подтверждена и активна 3 -тестовая\r\n4- Учётка для учёта ТС\r\n\r\n')
     is_billing = models.IntegerField(blank=True, null=True, db_comment='Билинговый ли аккаунт\r\n0-не Билинговый\r\n1 - Билинговый')
     onec_contracts_id = models.IntegerField(blank=True, null=True, db_comment='ID договора')
+    id_login_in_sys = models.CharField(max_length=200, blank=True, null=True, db_comment='Ид пользователя в системе')
+    last_entry = models.DateTimeField(blank=True, null=True, db_comment='Дата последнего входа\r\nПользователя')
+    login_enabling = models.IntegerField(blank=True, null=True, db_comment='0-не активен\r\n1-активен')
 
     class Meta:
         managed = False

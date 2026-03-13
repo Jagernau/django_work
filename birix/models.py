@@ -171,6 +171,10 @@ class LoginUsers(models.Model):
         not_in_billing = 0, 'Не биллинговая'
         in_billing = 1, 'Биллинговая учётка'
 
+    class AktivChoices(models.IntegerChoices):
+        not_act = 0, 'Не активна'
+        act = 1, 'Активна'
+
     client_name = models.CharField(
             max_length=200, 
             blank=True,
@@ -243,7 +247,10 @@ class LoginUsers(models.Model):
             choices=BillingChoices.choices,
             default=BillingChoices.in_billing
             )
-    onec_contracts_id = models.IntegerField(blank=True, null=True, db_comment='ID договора')
+    onec_contracts_id = models.IntegerField(blank=True, null=True, db_comment='ID договора', verbose_name='ID договора')
+    id_login_in_sys = models.CharField(max_length=200, blank=True, null=True, db_comment='Ид пользователя в системе', verbose_name='ID пользователя в СМ')
+    last_entry = models.DateTimeField(blank=True, null=True, db_comment='Дата последнего входа\r\nПользователя', verbose_name='Последний вход')
+    login_enabling = models.IntegerField(blank=True, null=True, db_comment='0-не активен\r\n1-активен', verbose_name='Активность', choices=AktivChoices.choices)
 
 
     def clean(self):
