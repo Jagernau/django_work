@@ -1,0 +1,26 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: django-web
+  labels:
+    app: django-web
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: django-web
+  template:
+    metadata:
+      labels:
+        app: django-web
+    spec:
+      containers:
+        - name: django-web
+          # ВАЖНО: Указываем правильный путь до образа в YCR
+          image: cr.yandex/crp5am1pol8d1omlv1ja/django-work:latest
+          command: ["gunicorn", "suntel.wsgi:application", "--bind", "0.0.0.0:8000"]
+          ports:
+            - containerPort: 8000
+          envFrom:
+            - secretRef:
+                name: django-env

@@ -1,0 +1,27 @@
+on:
+  push:
+    - workflows: [build-and-push]
+      filter:
+        branches: ["main", "master", "exp"]
+
+workflows:
+  build-and-push:
+    tasks:
+      - name: build-django-work # <--- Изменено имя таски
+        cubes:
+          - name: build-and-push-to-ycr
+            image: docker:latest
+            env:
+              YC_JSON_KEY: ${{ secrets.YC_JSON_KEY }}
+            script:
+              - echo "Начинаем сборку образа Django..."
+              # Изменено имя образа на django-work
+              - docker build -t cr.yandex/crp5am1pol8d1omlv1ja/django-work:latest .
+              
+              - echo "Авторизуемся в Yandex Container Registry..."
+              - echo "$YC_JSON_KEY" | docker login --username json_key --password-stdin cr.yandex
+              
+              - echo "Отправляем образ в приватный реестр YCR..."
+              # Изменено имя образа на django-work
+              - docker push cr.yandex/crp5am1pol8d1omlv1ja/django-work:latest
+              - echo "Образ успешно собран и отправлен!"

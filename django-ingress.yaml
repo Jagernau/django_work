@@ -1,0 +1,29 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: django-cms-ingress
+  namespace: default
+  annotations:
+    kubernetes.io/ingress.class: "nginx"
+    # Автоматический выпуск SSL сертификата
+    cert-manager.io/cluster-issuer: "letsencrypt-prod"
+    # Настройки таймаутов
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "3600"
+    nginx.ingress.kubernetes.io/proxy-send-timeout: "3600"
+spec:
+  tls:
+    - hosts:
+        - yaclo.suntel-nn.ru
+      # Имя секрета, куда cert-manager автоматически положит ключи (cert.pem и key.pem)
+      secretName: yaclo-suntel-tls 
+  rules:
+    - host: yaclo.suntel-nn.ru
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: django-cms-svc
+                port:
+                  number: 8000

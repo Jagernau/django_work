@@ -1,26 +1,17 @@
-FROM python:3.10
-COPY . /django_work
-WORKDIR /django_work
+FROM python:3.9-slim
 
-ENV DEBUG=${DEBUG}
-ENV SECRET_KEY=${SECRET_KEY}
-ENV DB_NAME=${DB_NAME}
-ENV DB_USER=${DB_USER}
-ENV DB_PASSWORD=${DB_PASSWORD}
-ENV DB_HOST=${DB_HOST}
-ENV DB_PORT=${DB_PORT}
-ENV TOKEN_ATS=${TOKEN_ATS}
-ENV URL_ATS=${URL_ATS}
-ENV EMAIL_HOST_USER=${EMAIL_HOST_USER}
-ENV EMAIL_HOST_PASSWORD=${EMAIL_HOST_PASSWORD}
-ENV TOKEN_YANDEX=${TOKEN_YANDEX}
-ENV OK_TOKEN=${OK_TOKEN}
-ENV OK_URL=${OK_URL}
+WORKDIR /app
 
-ENV MTS_API_SMS_LOGIN=${MTS_API_SMS_LOGIN}
-ENV MTS_API_SMS_PASSWORD=${MTS_API_SMS_PASSWORD}
-ENV MTS_API_SMS_NAMING=${MTS_API_SMS_NAMING}
-
-RUN pip install --upgrade pip
+# Устанавливаем зависимости
+COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
+# Копируем исходный код
+COPY . .
+
+# Собираем статику (для whitenoise)
+RUN python manage.py collectstatic --noinput
+
+# Открываем порт и запускаем Gunicorn
+EXPOSE 8000
+CMD ["gunicorn", "suntel.wsgi:application", "--bind", "0.0.0.0:8000"]
