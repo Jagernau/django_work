@@ -5,7 +5,7 @@ metadata:
   namespace: default
 spec:
   selector:
-    app: django-cms
+    app: django-web
   ports:
     - protocol: TCP
       port: 8000
